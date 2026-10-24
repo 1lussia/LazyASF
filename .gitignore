@@ -1,0 +1,25 @@
+# портативные JDK / Android SDK / Gradle (ставятся tools/setup-android-sdk.ps1)
+_sdk/
+
+# готовые сборки — в GitHub Releases
+dist/
+
+# .NET
+bin/
+obj/
+*.user
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# рабочие файлы программы
+log.txt
+config.json
+_sdk_setup.log
