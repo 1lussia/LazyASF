@@ -125,6 +125,7 @@ public sealed class Server
         var client = new Client { Ws = ws };
         var buf = new byte[64 * 1024];
         bool authed = false;
+        string reason = "телефон закрыл соединение";
         try
         {
             while (ws.State == WebSocketState.Open)
@@ -149,8 +150,9 @@ public sealed class Server
                 Handle(client, t, root);
             }
         }
-        catch (Exception e) when (e is WebSocketException or JsonException or OperationCanceledException)
+        catch (Exception e) when (e is WebSocketException or JsonException or OperationCanceledException or IOException)
         {
+            reason = e.InnerException?.Message ?? e.Message;
         }
         finally
         {
@@ -158,7 +160,7 @@ public sealed class Server
                 try { await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None); } catch { }
             if (_clients.TryRemove(client, out _))
             {
-                Log.Write($"📱 Отключился: {client.Device}");
+                Log.Write($"📱 Отключился: {client.Device} ({reason})");
                 ClientsChanged?.Invoke();
             }
         }

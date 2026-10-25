@@ -152,7 +152,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         viewModelScope.launch {
-            pc.send("audio_output", "target" to "tv")
+            if (!cmd("audio_output", "target" to "tv")) return@launch
             // ноут переводит звук на ТВ и отпускает наушники — телефон забирает их обратно
             delay(4000)
             if (prefs.btDisabledByApp) {
@@ -169,12 +169,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.btDisabledByApp = true
                 delay(2000)
             }
-            pc.send("headphones_connect", "headphones" to (headphones ?: pc.defaultDevice.value))
+            cmd("headphones_connect", "headphones" to (headphones ?: pc.defaultDevice.value))
         }
     }
 
+    private var lastNoLinkToast = 0L
+
+    /** Команда ноуту; если связи нет — говорим об этом (не чаще раза в 3 с), а не молчим. */
+    private fun cmd(type: String, vararg fields: Pair<String, Any?>): Boolean {
+        val ok = pc.send(type, *fields)
+        if (!ok && System.currentTimeMillis() - lastNoLinkToast > 3000) {
+            lastNoLinkToast = System.currentTimeMillis()
+            events.tryEmit(UiEvent.Toast("Нет связи с ноутом — переподключаюсь…"))
+        }
+        return ok
+    }
+
+    fun onResume() = pc.ensureAlive()
+
     fun restore() {
-        pc.send("restore")
+        if (!cmd("restore")) return
         SleepAlarm.cancel(getApplication())
         screen = Screen.Home
         viewModelScope.launch {
@@ -188,13 +202,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setSleep(minutes: Int) {
-        pc.send("sleep", "minutes" to minutes)
+        if (!cmd("sleep", "minutes" to minutes)) return
+        val at = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(System.currentTimeMillis() + minutes * 60_000L)
+        events.tryEmit(UiEvent.Toast("Таймер сна: $minutes мин, выключение в $at"))
         if (prefs.btDisabledByApp)
             SleepAlarm.schedule(getApplication(), System.currentTimeMillis() + minutes * 60_000L + 20_000L)
     }
 
     fun cancelSleep() {
-        pc.send("sleep_cancel")
+        if (!cmd("sleep_cancel")) return
+        events.tryEmit(UiEvent.Toast("Таймер сна отменён"))
         SleepAlarm.cancel(getApplication())
     }
 
@@ -204,7 +221,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val speed = kotlin.math.sqrt(dxDp * dxDp + dyDp * dyDp)
         val accel = 1f + min(1.6f, (speed - 1.5f).coerceAtLeast(0f) / 8f)
         val k = sensitivity * accel
-        pc.send("move", "dx" to (dxDp * k).toDouble(), "dy" to (dyDp * k).toDouble())
+        cmd("move", "dx" to (dxDp * k).toDouble(), "dy" to (dyDp * k).toDouble())
     }
 
     fun scroll(dxDp: Float, dyDp: Float) {
@@ -212,11 +229,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val k = 6f * scrollSpeed * sign
         val dy = dyDp * k
         val dx = -dxDp * k
-        if (abs(dy) > 0.01f || abs(dx) > 0.01f) pc.send("scroll", "dy" to dy.toDouble(), "dx" to dx.toDouble())
+        if (abs(dy) > 0.01f || abs(dx) > 0.01f) cmd("scroll", "dy" to dy.toDouble(), "dx" to dx.toDouble())
     }
 
-    fun button(b: String, down: Boolean) = pc.send("btn", "b" to b, "down" to down)
-    fun click(b: String = "left") = pc.send("click", "b" to b)
-    fun key(k: String) = pc.send("key", "k" to k)
-    fun text(s: String) = pc.send("text", "s" to s)
+    fun button(b: String, down: Boolean) = cmd("btn", "b" to b, "down" to down)
+    fun click(b: String = "left") = cmd("click", "b" to b)
+    fun key(k: String) = cmd("key", "k" to k)
+    fun text(s: String) = cmd("text", "s" to s)
 }

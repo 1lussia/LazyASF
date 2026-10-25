@@ -98,10 +98,38 @@ class PcConnection(
         _conn.value = Conn.Idle
     }
 
+    /** false — команда не ушла (нет связи); заодно запускаем переподключение. */
     fun send(type: String, vararg fields: Pair<String, Any?>): Boolean {
         val o = JSONObject().put("t", type)
         fields.forEach { (k, v) -> o.put(k, v) }
-        return ws?.send(o.toString()) ?: false
+        val sent = isConnected && ws?.send(o.toString()) == true
+        if (!sent && wanted && reconnectJob?.isActive != true && _conn.value !is Conn.Connecting) reconnectNow()
+        return sent
+    }
+
+    @Volatile private var lastRx = 0L
+
+    /**
+     * Вызывается, когда приложение снова на экране. Samsung «замораживает» фоновые приложения,
+     * и сокет может умереть молча — поэтому шлём ping и, если за 1,5 с нет ответа, переподключаемся.
+     */
+    fun ensureAlive() {
+        if (!wanted || _conn.value is Conn.NeedPin) return
+        val socket = ws
+        if (socket == null || !isConnected) { if (_conn.value !is Conn.Connecting) reconnectNow(); return }
+        val pingAt = System.currentTimeMillis()
+        socket.send(JSONObject().put("t", "ping").toString())
+        scope.launch {
+            delay(1500)
+            if (lastRx < pingAt && ws === socket) reconnectNow()
+        }
+    }
+
+    private fun reconnectNow() {
+        reconnectJob?.cancel()
+        ws?.cancel()
+        ws = null
+        open()
     }
 
     private fun open() {
@@ -125,6 +153,7 @@ class PcConnection(
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 if (webSocket !== ws) return
+                lastRx = System.currentTimeMillis()
                 runCatching { handle(t, JSONObject(text)) }
             }
 
@@ -153,7 +182,7 @@ class PcConnection(
         if (wanted) {
             reconnectJob?.cancel()
             reconnectJob = scope.launch {
-                delay(2000)
+                delay(1000)
                 if (wanted && ws == null) open()
             }
         }
