@@ -60,7 +60,7 @@ public sealed class AppConfig
     public string TvAudioDevice { get; set; } = "SAMSUNG";
 
     /// <summary>Что делать ноуту, когда сработал таймер сна: sleep | hibernate | shutdown | none</summary>
-    public string SleepTimerPowerAction { get; set; } = "sleep";
+    public string SleepTimerPowerAction { get; set; } = "shutdown";
     public TvConfig Tv { get; set; } = new();
 
     public List<string> PairedTokens { get; set; } = new();

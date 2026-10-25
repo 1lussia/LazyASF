@@ -97,7 +97,7 @@ private fun SheetTitle(text: String, sub: String? = null) {
 private fun SleepContent(vm: AppViewModel, close: () -> Unit) {
     val session by vm.pc.session.collectAsState()
     val left = rememberCountdown(session.sleepEndsAt)
-    SheetTitle("Таймер сна", left?.let { "Осталось $it" } ?: "Потом всё вернётся как было, ТВ и ноут уснут")
+    SheetTitle("Таймер сна", left?.let { "Осталось $it" } ?: "Потом всё вернётся как было, ТВ и ноут выключатся")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         listOf(15, 30, 45, 60, 90, 120).forEach { m ->
             GlassButton(onClick = { vm.setSleep(m); close() }, modifier = Modifier.size(width = 100.dp, height = 64.dp), radius = 22.dp) {
