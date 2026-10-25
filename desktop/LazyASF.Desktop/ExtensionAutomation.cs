@@ -25,14 +25,24 @@ public static class ExtensionAutomation
         return null;
     }
 
-    static AutomationElement? FindButton(AutomationElement win, IEnumerable<string> names)
+    /// <summary>
+    /// Кнопка «подключить» в окошке расширения: имя начинается с одного из слов (без учёта регистра),
+    /// не содержит запрещённых слов и находится под значком расширения — так не зацепим кнопки самого сайта.
+    /// </summary>
+    static AutomationElement? FindConnectButton(AutomationElement win, System.Windows.Rect icon, ExtensionConfig ext)
     {
-        foreach (var n in names)
+        var area = new System.Windows.Rect(icon.Right - 1000, icon.Bottom, 1100, 1000);
+        var buttons = win.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button));
+        foreach (AutomationElement b in buttons)
         {
-            var e = win.FindFirst(TreeScope.Descendants, new AndCondition(
-                new PropertyCondition(AutomationElement.NameProperty, n),
-                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button)));
-            if (e is not null) return e;
+            var name = b.Current.Name.Trim();
+            if (name.Length == 0 || name.Length > 40) continue;
+            if (ext.NeverClick.Any(x => name.Contains(x, StringComparison.OrdinalIgnoreCase))) continue;
+            if (!ext.ConnectNames.Any(x => name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Any(word => word.StartsWith(x, StringComparison.OrdinalIgnoreCase)))) continue;
+            var r = b.Current.BoundingRectangle;
+            if (r.IsEmpty || !area.Contains(new System.Windows.Point(r.X + r.Width / 2, r.Y + r.Height / 2))) continue;
+            return b;
         }
         return null;
     }
@@ -49,11 +59,13 @@ public static class ExtensionAutomation
             for (int i = 0; i < 20 && (icon = FindToolbarButton(win, ext.ToolbarName)) is null; i++) await Task.Delay(300);
             if (icon is null) return (false, $"Нет значка «{ext.ToolbarName}» на панели Chrome — закрепи его (пазл → 📌)");
 
-            ClickCenter(icon.Current.BoundingRectangle);
+            var iconRect = icon.Current.BoundingRectangle;
+            ClickCenter(iconRect);
 
             // ждём окошко расширения
             AutomationElement? btn = null;
-            for (int i = 0; i < 20 && (btn = FindButton(win, ext.ConnectNames)) is null; i++) await Task.Delay(300);
+            for (int i = 0; i < 12 && (btn = FindConnectButton(win, iconRect, ext)) is null; i++) await Task.Delay(400);
+            if (btn is not null) Log.Write($"Расширение: жму «{btn.Current.Name}»");
             if (btn is null)
             {
                 // кнопки «подключить» нет — скорее всего, уже подключено

@@ -20,8 +20,10 @@ public sealed class ExtensionConfig
     public string Mode { get; set; } = "uia";
     /// <summary>Часть названия расширения (как в подсказке иконки на панели Chrome).</summary>
     public string ToolbarName { get; set; } = "ЮБуст";
-    /// <summary>Надписи кнопки «подключить» в окошке расширения.</summary>
-    public List<string> ConnectNames { get; set; } = new() { "Verbinden", "Подключить", "Connect" };
+    /// <summary>Начала слов на кнопке «подключить» в окошке расширения (на любом языке интерфейса).</summary>
+    public List<string> ConnectNames { get; set; } = new() { "Подключ", "Verbind", "Connect", "Включить" };
+    /// <summary>Кнопки с такими словами не нажимаем никогда.</summary>
+    public List<string> NeverClick { get; set; } = new() { "Отключ", "Trenn", "Disconnect", "Premium", "Премиум", "Abonnement", "Подписк", "Telegram", "Hilfe", "Помощь" };
     /// <summary>Например "Alt+Shift+Y" (для mode=hotkey).</summary>
     public string Hotkey { get; set; } = "";
     /// <summary>Координаты клика (для mode=click).</summary>
