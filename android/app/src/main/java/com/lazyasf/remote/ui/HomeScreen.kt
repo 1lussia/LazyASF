@@ -72,6 +72,7 @@ fun HomeScreen(vm: AppViewModel, onLaunch: (Site) -> Unit, openSheet: (Sheet) ->
                 dot = if (session.headphonesConnected) Palette.Ok else null)
             GlassChip(countdown ?: "Таймер сна", Icons.Rounded.Bedtime, { openSheet(Sheet.Sleep) })
         }
+        OutputToggle(vm.output, vm::changeOutput, Modifier.fillMaxWidth())
 
         Text("Что смотрим?", color = Palette.Text, fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
 

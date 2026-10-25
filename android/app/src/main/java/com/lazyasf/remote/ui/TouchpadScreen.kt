@@ -77,11 +77,11 @@ fun TouchpadScreen(vm: AppViewModel, openSheet: (Sheet) -> Unit) {
         // --- верх: домой, статус наушников, таймер
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassIconButton(Icons.Rounded.Home, "Домой", { vm.screen = Screen.Home }, size = 44.dp)
+            OutputToggle(vm.output, vm::changeOutput, Modifier.width(150.dp), compact = true)
             val hp = session.step("headphones")
             when {
-                session.busy -> GlassChip(hp?.detail ?: "Настраиваю…", Icons.Rounded.Headphones, {}, dot = Palette.Orange)
-                hp?.status == "fail" -> GlassChip("Повторить наушники", Icons.Rounded.Refresh, vm::reconnectHeadphones, dot = Palette.Fail)
-                session.headphonesConnected -> GlassChip(session.headphones, Icons.Rounded.Headphones, { openSheet(Sheet.Headphones) }, dot = Palette.Ok)
+                session.busy -> GlassIconButton(Icons.Rounded.Headphones, "Настраиваю…", {}, size = 44.dp, tint = Palette.Orange)
+                hp?.status == "fail" -> GlassIconButton(Icons.Rounded.Refresh, "Повторить наушники", vm::reconnectHeadphones, size = 44.dp, tint = Palette.Fail)
             }
             Spacer(Modifier.weight(1f))
             GlassChip(countdown ?: "Сон", Icons.Rounded.Bedtime, { openSheet(Sheet.Sleep) })

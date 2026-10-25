@@ -36,6 +36,11 @@ class Prefs(context: Context) {
         get() = sp.getString("headphones", null)
         set(v) = sp.edit().putString("headphones", v).apply()
 
+    /** Куда звук: "headphones" | "tv". */
+    var audioOutput: String
+        get() = sp.getString("audioOutput", "headphones") ?: "headphones"
+        set(v) = sp.edit().putString("audioOutput", v).apply()
+
     var sensitivity: Float
         get() = sp.getFloat("sensitivity", 2.0f)
         set(v) = sp.edit().putFloat("sensitivity", v).apply()

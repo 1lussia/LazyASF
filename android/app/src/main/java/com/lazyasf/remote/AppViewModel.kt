@@ -48,6 +48,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // настройки
     var headphones by mutableStateOf(prefs.headphones)
+    var output by mutableStateOf(prefs.audioOutput)
+        private set
     var sensitivity by mutableFloatStateOf(prefs.sensitivity)
     var scrollSpeed by mutableFloatStateOf(prefs.scrollSpeed)
     var tapToClick by mutableStateOf(prefs.tapToClick)
@@ -114,7 +116,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val ctx = getApplication<Application>()
-                if (toggleBluetooth && PhoneBluetooth.isOn(ctx)) {
+                if (output == "headphones" && toggleBluetooth && PhoneBluetooth.isOn(ctx)) {
                     if (PhoneBluetooth.setOn(ctx, false)) {
                         prefs.btDisabledByApp = true
                         // ждём, пока наушники отцепятся от телефона
@@ -125,7 +127,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         events.tryEmit(UiEvent.OpenBluetoothSettings)
                     }
                 }
-                if (!pc.send("launch", "site" to site.key, "headphones" to (headphones ?: pc.defaultDevice.value)))
+                if (!pc.send("launch", "site" to site.key, "headphones" to (headphones ?: pc.defaultDevice.value), "output" to output))
                     events.tryEmit(UiEvent.Toast("Нет связи с ноутом"))
                 else {
                     delay(600)
@@ -133,6 +135,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } finally {
                 launching = null
+            }
+        }
+    }
+
+    /** "headphones" | "tv". Если режим ТВ уже идёт — переключаем звук сразу. */
+    fun changeOutput(target: String) {
+        if (output == target) return
+        output = target
+        prefs.audioOutput = target
+        if (!pc.session.value.active) return
+        if (target == "headphones") {
+            reconnectHeadphones()
+            return
+        }
+        viewModelScope.launch {
+            pc.send("audio_output", "target" to "tv")
+            // ноут переводит звук на ТВ и отпускает наушники — телефон забирает их обратно
+            delay(4000)
+            if (prefs.btDisabledByApp) {
+                PhoneBluetooth.setOn(getApplication(), true)
+                prefs.btDisabledByApp = false
             }
         }
     }

@@ -1,4 +1,4 @@
-# Пересобрать всё в D:\LazyASF\dist
+﻿# Пересобрать всё в D:\LazyASF\dist
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
 $env:JAVA_HOME = "$root\_sdk\jdk17"

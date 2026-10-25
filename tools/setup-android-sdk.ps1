@@ -1,4 +1,4 @@
-# Ставит портативные JDK 17 + Android SDK + Gradle в D:\LazyASF\_sdk (без админки)
+﻿# Ставит портативные JDK 17 + Android SDK + Gradle в D:\LazyASF\_sdk (без админки)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $root = Join-Path $PSScriptRoot '..\_sdk' | Resolve-Path -ErrorAction SilentlyContinue

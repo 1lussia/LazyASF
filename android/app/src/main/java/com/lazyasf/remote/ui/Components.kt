@@ -6,21 +6,35 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -170,3 +184,45 @@ fun SectionTitle(text: String) {
 }
 
 val FullWidthSpacing = Arrangement.spacedBy(12.dp)
+
+/** Переключатель «куда звук»: стеклянная таблетка с ползунком. */
+@Composable
+fun OutputToggle(output: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
+    val tv = output == "tv"
+    val bias by animateFloatAsState(if (tv) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 400f), label = "bias")
+    val shape = RoundedCornerShape(if (compact) 18.dp else 22.dp)
+    GlassSurface(modifier.height(if (compact) 44.dp else 52.dp), radius = if (compact) 22.dp else 26.dp) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(4.dp)) {
+            val half = maxWidth / 2
+            Box(
+                Modifier
+                    .offset(x = half * bias)
+                    .width(half)
+                    .fillMaxHeight()
+                    .clip(shape)
+                    .background(Color.White.copy(alpha = 0.20f))
+                    .border(1.dp, Color.White.copy(alpha = 0.40f), shape)
+            )
+            Row(Modifier.fillMaxSize()) {
+                OutputSegment(Icons.Rounded.Headphones, if (compact) "Уши" else "Наушники", !tv, compact, Modifier.weight(1f)) { onChange("headphones") }
+                OutputSegment(Icons.Rounded.Tv, if (compact) "ТВ" else "Телевизор", tv, compact, Modifier.weight(1f)) { onChange("tv") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutputSegment(icon: ImageVector, label: String, selected: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier
+            .fillMaxHeight()
+            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val c = if (selected) Palette.Text else Palette.TextDim.copy(alpha = 0.55f)
+        Icon(icon, null, tint = c, modifier = Modifier.size(if (compact) 18.dp else 20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = c, fontSize = if (compact) 13.sp else 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+    }
+}

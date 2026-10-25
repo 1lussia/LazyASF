@@ -33,6 +33,7 @@ data class Session(
     val headphones: String = "",
     val headphonesConnected: Boolean = false,
     val sleepEndsAt: Long? = null,
+    val output: String = "headphones",
     val steps: List<Step> = emptyList(),
 ) {
     fun step(id: String) = steps.firstOrNull { it.id == id }
@@ -186,6 +187,7 @@ class PcConnection(private val prefs: Prefs, private val scope: CoroutineScope) 
             headphones = s.optString("headphones"),
             headphonesConnected = s.optBoolean("headphonesConnected"),
             sleepEndsAt = if (s.isNull("sleepEndsAt")) null else s.optLong("sleepEndsAt"),
+            output = s.optString("output", "headphones"),
             steps = steps,
         )
     }

@@ -194,10 +194,13 @@ public sealed class Server
                 Input.Text(Str(m, "s"));
                 break;
             case "launch":
-                _ = Task.Run(() => _orch.Launch(Str(m, "site"), Str(m, "headphones")));
+                _ = Task.Run(() => _orch.Launch(Str(m, "site"), Str(m, "headphones"), Str(m, "output")));
                 break;
             case "headphones_connect":
-                _ = Task.Run(() => _orch.ReconnectHeadphones(Str(m, "headphones")));
+                _ = Task.Run(() => _orch.SwitchOutput("headphones", Str(m, "headphones")));
+                break;
+            case "audio_output":
+                _ = Task.Run(() => _orch.SwitchOutput(Str(m, "target"), Str(m, "headphones")));
                 break;
             case "restore":
                 _ = Task.Run(() => _orch.Restore("с телефона"));

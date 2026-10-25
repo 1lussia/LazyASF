@@ -56,6 +56,9 @@ public sealed class AppConfig
     public string DefaultHeadphones { get; set; } = "REDMI Buds 8 Pro";
     public int HeadphonesConnectTimeoutSec { get; set; } = 40;
 
+    /// <summary>Подстрока имени аудиоустройства телевизора (HDMI), например "SAMSUNG".</summary>
+    public string TvAudioDevice { get; set; } = "SAMSUNG";
+
     /// <summary>Что делать ноуту, когда сработал таймер сна: sleep | hibernate | shutdown | none</summary>
     public string SleepTimerPowerAction { get; set; } = "sleep";
     public TvConfig Tv { get; set; } = new();

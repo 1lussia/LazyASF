@@ -21,7 +21,8 @@
 | `click` | `b` | клик |
 | `key` | `k`: `space`, `f11`, `ctrl+w`, `volup`, `playpause`, `browserback`… | клавиша/сочетание |
 | `text` | `s` | ввод текста (Unicode) |
-| `launch` | `site`: youtube/boosty/kino, `headphones` | режим ТВ |
+| `launch` | `site`: youtube/boosty/kino, `headphones`, `output`: headphones/tv | режим ТВ |
+| `audio_output` | `target`: headphones/tv, `headphones` | переключить звук на лету |
 | `headphones_connect` | `headphones` | только переподключить наушники |
 | `restore` | — | вернуть всё как было |
 | `sleep` | `minutes` | таймер сна |
@@ -30,6 +31,6 @@
 | `ping` | — | `pong` |
 
 ## Сообщения ноута
-- `{"t":"state","state":{"active","busy","site","headphones","headphonesConnected","sleepEndsAt","steps":[{"id","title","status","detail"}]}}`
+- `{"t":"state","state":{"active","busy","site","headphones","headphonesConnected","sleepEndsAt","output","steps":[{"id","title","status","detail"}]}}`
   — `status`: pending | running | ok | fail | skip.
 - `{"t":"devices","devices":["REDMI Buds 8 Pro", …],"default":"REDMI Buds 8 Pro"}`

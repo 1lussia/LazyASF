@@ -1,4 +1,4 @@
-# Рисует иконку (ТВ на градиенте) и сохраняет PNG + ICO (PNG внутри ICO)
+﻿# Рисует иконку (ТВ на градиенте) и сохраняет PNG + ICO (PNG внутри ICO)
 param([string]$OutIco, [string]$OutPng)
 Add-Type -AssemblyName System.Drawing
 $size = 256

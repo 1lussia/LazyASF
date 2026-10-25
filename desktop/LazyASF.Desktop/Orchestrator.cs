@@ -18,6 +18,8 @@ public sealed class SessionState
     public string? Site { get; set; }
     public string Headphones { get; set; } = "";
     public bool HeadphonesConnected { get; set; }
+    /// <summary>Куда звук: headphones | tv</summary>
+    public string Output { get; set; } = "headphones";
     /// <summary>Unix ms, когда сработает таймер сна; null — таймера нет.</summary>
     public long? SleepEndsAt { get; set; }
     public List<StepInfo> Steps { get; set; } = new();
@@ -55,7 +57,7 @@ public sealed class Orchestrator
             return new SessionState
             {
                 Active = State.Active, Busy = State.Busy, Site = State.Site, Headphones = State.Headphones,
-                HeadphonesConnected = State.HeadphonesConnected, SleepEndsAt = State.SleepEndsAt,
+                HeadphonesConnected = State.HeadphonesConnected, SleepEndsAt = State.SleepEndsAt, Output = State.Output,
                 Steps = State.Steps.Select(s => new StepInfo { Id = s.Id, Title = s.Title, Status = s.Status, Detail = s.Detail }).ToList(),
             };
         }
@@ -70,13 +72,15 @@ public sealed class Orchestrator
     }
 
     // ---------------------------------------------------------------- launch
-    public async Task Launch(string siteKey, string? headphones)
+    public async Task Launch(string siteKey, string? headphones, string? output)
     {
         if (!_cfg.Sites.TryGetValue(siteKey, out var site)) { Log.Write($"Неизвестный сайт: {siteKey}"); return; }
         if (!await _gate.WaitAsync(0)) { Log.Write("Уже выполняется другая команда"); return; }
         try
         {
             if (!string.IsNullOrWhiteSpace(headphones)) State.Headphones = headphones;
+            State.Output = output == "tv" ? "tv" : "headphones";
+            bool toTv = State.Output == "tv";
             bool withExtension = siteKey == "youtube" && _cfg.YoutubeExtension.Mode != "none";
             lock (_lock)
             {
@@ -88,13 +92,11 @@ public sealed class Orchestrator
                     new() { Id = "browser", Title = $"Открыть {site.Title}" },
                     new() { Id = "extension", Title = "Расширение YouTube", Status = withExtension ? "pending" : "skip",
                             Detail = withExtension ? null : (siteKey == "youtube" ? "не настроено" : null) },
-                    new() { Id = "bluetooth", Title = "Bluetooth на ноуте" },
-                    new() { Id = "headphones", Title = $"Подключить {State.Headphones}" },
-                    new() { Id = "audio", Title = "Звук в наушники" },
                 };
+                ResetOutputSteps(toTv);
             }
             Notify();
-            Log.Write($"▶ Режим ТВ: {site.Title}, наушники «{State.Headphones}»");
+            Log.Write($"▶ Режим ТВ: {site.Title}, звук → {(toTv ? "телевизор" : $"наушники «{State.Headphones}»")}");
 
             if (!State.Active)
             {
@@ -123,8 +125,9 @@ public sealed class Orchestrator
                 Mark("extension", RunExtension() ? "ok" : "fail");
             }
 
-            // 4-6. наушники
-            await ConnectHeadphones();
+            // 4. звук
+            if (toTv) await ConnectTvAudio();
+            else await ConnectHeadphones();
         }
         catch (Exception e)
         {
@@ -138,27 +141,46 @@ public sealed class Orchestrator
         }
     }
 
-    /// <summary>Только наушники — кнопка «Повторить» на телефоне.</summary>
-    public async Task ReconnectHeadphones(string? headphones)
+    void ResetOutputSteps(bool toTv)
+    {
+        lock (_lock)
+        {
+            State.Steps.RemoveAll(s => s.Id is "bluetooth" or "headphones" or "audio");
+            if (toTv)
+            {
+                State.Steps.Add(new() { Id = "audio", Title = "Звук на телевизор" });
+                return;
+            }
+            State.Steps.Add(new() { Id = "bluetooth", Title = "Bluetooth на ноуте" });
+            State.Steps.Add(new() { Id = "headphones", Title = $"Подключить {State.Headphones}" });
+            State.Steps.Add(new() { Id = "audio", Title = "Звук в наушники" });
+        }
+    }
+
+    /// <summary>Переключить звук на лету: tv | headphones. Также «Повторить наушники» на телефоне.</summary>
+    public async Task SwitchOutput(string target, string? headphones)
     {
         if (!await _gate.WaitAsync(0)) return;
         try
         {
+            bool toTv = target == "tv";
+            State.Output = toTv ? "tv" : "headphones";
             if (!string.IsNullOrWhiteSpace(headphones)) State.Headphones = headphones;
-            lock (_lock)
-            {
-                State.Busy = true;
-                foreach (var (id, title) in new[] { ("bluetooth", "Bluetooth на ноуте"), ("headphones", $"Подключить {State.Headphones}"), ("audio", "Звук в наушники") })
-                {
-                    var s = State.Steps.FirstOrDefault(x => x.Id == id);
-                    if (s is null) State.Steps.Add(s = new StepInfo { Id = id });
-                    s.Title = title; s.Status = "pending"; s.Detail = null;
-                }
-            }
+            lock (_lock) State.Busy = true;
+            ResetOutputSteps(toTv);
             Notify();
-            await ConnectHeadphones();
+            Log.Write($"🔊 Звук → {(toTv ? "телевизор" : State.Headphones)}");
+            if (toTv)
+            {
+                await ConnectTvAudio();
+                // отпускаем наушники, чтобы телефон мог их забрать
+                foreach (var ep in Audio.FindHeadphones(State.Headphones).Where(e => e.Active))
+                    Audio.BtOneShot(ep, connect: false);
+                State.HeadphonesConnected = false;
+            }
+            else await ConnectHeadphones();
         }
-        catch (Exception e) { Log.Write($"Ошибка наушников: {e}"); }
+        catch (Exception e) { Log.Write($"Ошибка переключения звука: {e}"); }
         finally
         {
             State.Busy = false;
@@ -182,6 +204,26 @@ public sealed class Orchestrator
             default:
                 return false;
         }
+    }
+
+    AudioEndpoint? FindTvAudio()
+    {
+        var active = Audio.List().Where(e => e.Active).ToList();
+        return active.FirstOrDefault(e => !string.IsNullOrWhiteSpace(_cfg.TvAudioDevice)
+                                          && e.Name.Contains(_cfg.TvAudioDevice, StringComparison.OrdinalIgnoreCase))
+            ?? active.FirstOrDefault(e => e.DeviceName.Contains("Display Audio", StringComparison.OrdinalIgnoreCase)
+                                          || e.Name.Contains("HDMI", StringComparison.OrdinalIgnoreCase)
+                                          || e.DeviceName.Contains("HDMI", StringComparison.OrdinalIgnoreCase));
+    }
+
+    async Task ConnectTvAudio()
+    {
+        Mark("audio", "running", "Жду звук по HDMI…");
+        AudioEndpoint? tv = null;
+        // после переключения экрана HDMI-звук появляется через пару секунд
+        for (int i = 0; i < 15 && (tv = FindTvAudio()) is null; i++) await Task.Delay(1000);
+        if (tv is null) { Mark("audio", "fail", "Не нашёл звук телевизора — проверь tvAudioDevice в config.json"); return; }
+        Mark("audio", Audio.SetDefault(tv.Id) ? "ok" : "fail", tv.Name);
     }
 
     async Task ConnectHeadphones()
