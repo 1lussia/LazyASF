@@ -78,6 +78,7 @@ object Palette {
     val YouTube = Color(0xFFFF3B3B)
     val Boosty = Color(0xFFFF7A1A)
     val Kino = Color(0xFF8B5CF6)
+    val Taplink = Color(0xFF14C8A0)
 }
 
 private data class Blob(val color: Color, val x: Float, val y: Float, val r: Float, val sx: Float, val sy: Float, val phase: Float)
@@ -242,12 +243,12 @@ fun GlassSurface(
                             )
                         )
                     }
-                    // верхний блик
-                    drawRoundRect(
-                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f + glow * 0.1f), Color.Transparent), 0f, size.height * 0.5f),
-                        topLeft = Offset(size.width * 0.04f, 2f),
-                        size = Size(size.width * 0.92f, size.height * 0.48f),
-                        cornerRadius = CornerRadius(radiusPx, radiusPx),
+                    // верхний блик — мягкий, без видимых краёв
+                    drawRect(
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.16f + glow * 0.08f), Color.White.copy(alpha = 0.04f), Color.Transparent),
+                            0f, min(size.height * 0.55f, radiusPx * 3f),
+                        )
                     )
                     // нижний отсвет
                     drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.06f)), size.height * 0.7f, size.height))

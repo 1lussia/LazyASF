@@ -15,6 +15,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import javax.net.SocketFactory
 
 sealed interface Conn {
     data object Idle : Conn
@@ -40,11 +41,21 @@ data class Session(
 }
 
 /** WebSocket-соединение с программой на ноуте. Сам переподключается, если связь пропала. */
-class PcConnection(private val prefs: Prefs, private val scope: CoroutineScope) {
-    private val http = OkHttpClient.Builder()
+class PcConnection(
+    private val prefs: Prefs,
+    private val scope: CoroutineScope,
+    /** Сокеты через Wi-Fi в обход VPN; null — как решит система. */
+    private val socketFactory: () -> SocketFactory?,
+) {
+    private val baseHttp = OkHttpClient.Builder()
         .pingInterval(10, TimeUnit.SECONDS)
         .connectTimeout(4, TimeUnit.SECONDS)
         .build()
+
+    private fun httpFor(host: String): OkHttpClient {
+        if (host == "127.0.0.1" || host == "localhost") return baseHttp // adb reverse по USB
+        return socketFactory()?.let { baseHttp.newBuilder().socketFactory(it).build() } ?: baseHttp
+    }
 
     private data class Target(val host: String, val port: Int, val name: String?)
 
@@ -97,7 +108,7 @@ class PcConnection(private val prefs: Prefs, private val scope: CoroutineScope) 
         val t = target ?: return
         _conn.value = Conn.Connecting(t.host)
         val req = Request.Builder().url("ws://${t.host}:${t.port}/ws").build()
-        ws = http.newWebSocket(req, object : WebSocketListener() {
+        ws = httpFor(t.host).newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 val device = "${Build.MANUFACTURER} ${Build.MODEL}"
                 val p = pin
@@ -119,6 +130,12 @@ class PcConnection(private val prefs: Prefs, private val scope: CoroutineScope) 
 
             override fun onFailure(webSocket: WebSocket, t2: Throwable, response: Response?) {
                 if (webSocket !== ws) return
+                if (t2.message?.contains("EPERM") == true && !WifiNet.bindForbidden) {
+                    WifiNet.bindForbidden = true
+                    ws = null
+                    open()
+                    return
+                }
                 dropped(t, t2.message ?: "нет связи")
             }
 

@@ -90,9 +90,8 @@ public sealed class Orchestrator
                 {
                     new() { Id = "display", Title = "Только экран телевизора" },
                     new() { Id = "browser", Title = $"Открыть {site.Title}" },
-                    new() { Id = "extension", Title = "Расширение YouTube", Status = withExtension ? "pending" : "skip",
-                            Detail = withExtension ? null : (siteKey == "youtube" ? "не настроено" : null) },
                 };
+                if (withExtension) State.Steps.Add(new() { Id = "extension", Title = "VPN для YouTube (ЮБуст)" });
                 ResetOutputSteps(toTv);
             }
             Notify();
@@ -115,15 +114,21 @@ public sealed class Orchestrator
 
             // 2. браузер
             Mark("browser", "running");
-            Mark("browser", await Chrome.Open(_cfg, site.Url) ? "ok" : "fail");
+            var window = await Chrome.Open(_cfg, site.Url);
+            Mark("browser", window is null ? "fail" : "ok");
 
-            // 3. расширение YouTube (ЗАГЛУШКА до получения данных)
-            if (withExtension)
+            // 3. VPN-расширение для YouTube: подключаем, потом обновляем страницу
+            if (withExtension && window is { } win)
             {
                 Mark("extension", "running");
                 await Task.Delay(_cfg.YoutubeExtension.DelayMs);
-                Mark("extension", RunExtension() ? "ok" : "fail");
+                var (ok, detail) = await RunExtension(win);
+                Mark("extension", ok ? "ok" : "fail", detail);
+                if (ok && win != IntPtr.Zero && Win.Activate(win)) { Input.Combo("f5"); await Task.Delay(1500); }
             }
+            else if (withExtension) Mark("extension", "skip");
+
+            if (_cfg.BrowserFullscreen && window is { } w && w != IntPtr.Zero) Chrome.Fullscreen(w);
 
             // 4. звук
             if (toTv) await ConnectTvAudio();
@@ -189,20 +194,22 @@ public sealed class Orchestrator
         }
     }
 
-    bool RunExtension()
+    async Task<(bool ok, string? detail)> RunExtension(IntPtr window)
     {
         var ext = _cfg.YoutubeExtension;
         switch (ext.Mode)
         {
+            case "uia":
+                return window == IntPtr.Zero ? (false, "окно Chrome не найдено") : await ExtensionAutomation.Connect(window, ext);
             case "hotkey" when !string.IsNullOrWhiteSpace(ext.Hotkey):
-                return Input.Combo(ext.Hotkey);
+                return (Input.Combo(ext.Hotkey), null);
             case "click":
                 Input.MoveTo(ext.ClickX, ext.ClickY);
-                Thread.Sleep(150);
+                await Task.Delay(150);
                 Input.Click();
-                return true;
+                return (true, null);
             default:
-                return false;
+                return (false, "не настроено");
         }
     }
 
@@ -337,7 +344,7 @@ public sealed class Orchestrator
         Log.Write("⏾ Таймер сна сработал");
         Input.Combo("playpause");
         await Restore("таймер сна");
-        await TvControl.PowerOff(_cfg.Tv);
+        await TvControl.PowerOff(_cfg);
         await Task.Delay(3000);
         Log.Write($"Действие ноута: {_cfg.SleepTimerPowerAction}");
         Power.Do(_cfg.SleepTimerPowerAction);

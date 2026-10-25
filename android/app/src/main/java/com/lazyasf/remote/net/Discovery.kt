@@ -37,6 +37,7 @@ object Discovery {
         val found = linkedMapOf<String, FoundPc>()
         try {
             DatagramSocket().use { s ->
+                WifiNet.get(context)?.let { n -> runCatching { n.bindSocket(s) }.onFailure { WifiNet.bindForbidden = true } }
                 s.broadcast = true
                 s.soTimeout = 250
                 val msg = "LAZYASF?".toByteArray()

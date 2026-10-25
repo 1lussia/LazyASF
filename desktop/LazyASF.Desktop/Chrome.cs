@@ -6,9 +6,6 @@ namespace LazyASF;
 
 public static class Chrome
 {
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
-
     static readonly string LocalState = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Google\Chrome\User Data\Local State");
 
@@ -42,34 +39,36 @@ public static class Chrome
         return "Default";
     }
 
-    static bool IsRunning() => Process.GetProcessesByName("chrome").Length > 0;
-
-    static bool ForegroundIsChrome()
-    {
-        GetWindowThreadProcessId(GetForegroundWindow(), out var pid);
-        try { return Process.GetProcessById((int)pid).ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase); }
-        catch { return false; }
-    }
-
-    public static async Task<bool> Open(AppConfig cfg, string url)
+    /// <summary>
+    /// Открывает сайт в новом окне и возвращает это окно (IntPtr.Zero — окно не нашлось, но Chrome запущен).
+    /// null — Chrome не найден.
+    /// </summary>
+    public static async Task<IntPtr?> Open(AppConfig cfg, string url)
     {
         var exe = FindExe(cfg);
-        if (exe is null) { Log.Write("chrome.exe не найден — укажи chromePath в config.json"); return false; }
-        bool wasRunning = IsRunning();
+        if (exe is null) { Log.Write("chrome.exe не найден — укажи chromePath в config.json"); return null; }
+        var before = Native.Win.ChromeWindows();
         var profile = ProfileDir(cfg);
-        var args = $"--profile-directory=\"{profile}\" --new-window --start-maximized";
-        if (cfg.BrowserFullscreen && !wasRunning) args += " --start-fullscreen";
-        args += $" \"{url}\"";
         Log.Write($"Chrome [{profile}]: {url}");
-        Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false });
+        Process.Start(new ProcessStartInfo(exe, $"--profile-directory=\"{profile}\" --new-window --start-maximized \"{url}\"") { UseShellExecute = false });
 
-        if (cfg.BrowserFullscreen && wasRunning)
+        for (int i = 0; i < 50; i++)
         {
-            // Уже запущенный Chrome игнорирует --start-fullscreen: ждём новое окно и жмём F11.
-            for (int i = 0; i < 40 && !ForegroundIsChrome(); i++) await Task.Delay(200);
-            await Task.Delay(1200);
-            if (ForegroundIsChrome()) Native.Input.Combo("f11");
+            var fresh = Native.Win.ChromeWindows().Except(before).FirstOrDefault();
+            if (fresh != IntPtr.Zero) return fresh;
+            await Task.Delay(200);
         }
-        return true;
+        Log.Write("Новое окно Chrome не нашлось");
+        return IntPtr.Zero;
+    }
+
+    /// <summary>Полный экран (F11) для окна.</summary>
+    public static void Fullscreen(IntPtr window)
+    {
+        if (window == IntPtr.Zero) return;
+        Native.Win.Activate(window);
+        Thread.Sleep(300);
+        if (Native.Win.IsForeground(window)) Native.Input.Combo("f11");
+        else Log.Write("Не смог сделать Chrome активным — полный экран не включён (F11 с телефона)");
     }
 }

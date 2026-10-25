@@ -79,7 +79,12 @@ fun HomeScreen(vm: AppViewModel, onLaunch: (Site) -> Unit, openSheet: (Sheet) ->
         // --- три большие кнопки
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Site.entries.forEach { site ->
-                val tint = when (site) { Site.YouTube -> Palette.YouTube; Site.Boosty -> Palette.Boosty; Site.Kino -> Palette.Kino }
+                val tint = when (site) {
+                    Site.YouTube -> Palette.YouTube
+                    Site.Boosty -> Palette.Boosty
+                    Site.Kino -> Palette.Kino
+                    Site.Taplink -> Palette.Taplink
+                }
                 val current = session.active && session.site == site.key
                 GlassButton(
                     onClick = { onLaunch(site) },

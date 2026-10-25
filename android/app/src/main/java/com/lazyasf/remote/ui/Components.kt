@@ -53,6 +53,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -119,18 +122,20 @@ fun SiteLogo(site: Site, modifier: Modifier = Modifier) {
                 drawPath(p, Color.White)
             }
             Site.Kino -> {
-                drawRoundRect(Brush.linearGradient(listOf(Color(0xFFA78BFA), Color(0xFF6D28D9))), size = Size(w, size.height), cornerRadius = CornerRadius(w * 0.26f))
-                // кинолента
-                val holeW = w * 0.09f
-                for (i in 0 until 4) {
-                    val y = size.height * (0.16f + i * 0.2f)
-                    drawRoundRect(Color.White.copy(alpha = 0.85f), Offset(w * 0.10f, y), Size(holeW, holeW), CornerRadius(3f))
-                    drawRoundRect(Color.White.copy(alpha = 0.85f), Offset(w * 0.81f, y), Size(holeW, holeW), CornerRadius(3f))
+                // кружок с буквой «p», как у kinopub
+                drawCircle(Brush.linearGradient(listOf(Color(0xFFA78BFA), Color(0xFF5B21B6))), radius = w / 2)
+                val stroke = Stroke(width = w * 0.09f, cap = StrokeCap.Round)
+                drawLine(Color.White, Offset(w * 0.37f, w * 0.30f), Offset(w * 0.37f, w * 0.80f), strokeWidth = w * 0.09f, cap = StrokeCap.Round)
+                drawCircle(Color.White, radius = w * 0.15f, center = Offset(w * 0.52f, w * 0.45f), style = stroke)
+            }
+            Site.Taplink -> {
+                drawRoundRect(Brush.linearGradient(listOf(Color(0xFF2EE6B6), Color(0xFF0E9F87))), size = Size(w, size.height), cornerRadius = CornerRadius(w * 0.28f))
+                // звенья цепочки-ссылки
+                val stroke = Stroke(width = w * 0.08f, cap = StrokeCap.Round)
+                rotate(-45f) {
+                    drawRoundRect(Color.White, Offset(w * 0.20f, w * 0.38f), Size(w * 0.36f, w * 0.24f), CornerRadius(w * 0.12f), style = stroke)
+                    drawRoundRect(Color.White, Offset(w * 0.44f, w * 0.38f), Size(w * 0.36f, w * 0.24f), CornerRadius(w * 0.12f), style = stroke)
                 }
-                val p = Path().apply {
-                    moveTo(w * 0.40f, size.height * 0.32f); lineTo(w * 0.40f, size.height * 0.68f); lineTo(w * 0.66f, size.height * 0.5f); close()
-                }
-                drawPath(p, Color.White)
             }
         }
     }
@@ -204,15 +209,15 @@ fun OutputToggle(output: String, onChange: (String) -> Unit, modifier: Modifier 
                     .border(1.dp, Color.White.copy(alpha = 0.40f), shape)
             )
             Row(Modifier.fillMaxSize()) {
-                OutputSegment(Icons.Rounded.Headphones, if (compact) "Уши" else "Наушники", !tv, compact, Modifier.weight(1f)) { onChange("headphones") }
-                OutputSegment(Icons.Rounded.Tv, if (compact) "ТВ" else "Телевизор", tv, compact, Modifier.weight(1f)) { onChange("tv") }
+                OutputSegment(Icons.Rounded.Headphones, if (compact) null else "Наушники", !tv, compact, Modifier.weight(1f)) { onChange("headphones") }
+                OutputSegment(Icons.Rounded.Tv, if (compact) null else "Телевизор", tv, compact, Modifier.weight(1f)) { onChange("tv") }
             }
         }
     }
 }
 
 @Composable
-private fun OutputSegment(icon: ImageVector, label: String, selected: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun OutputSegment(icon: ImageVector, label: String?, selected: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier
             .fillMaxHeight()
@@ -221,8 +226,10 @@ private fun OutputSegment(icon: ImageVector, label: String, selected: Boolean, c
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val c = if (selected) Palette.Text else Palette.TextDim.copy(alpha = 0.55f)
-        Icon(icon, null, tint = c, modifier = Modifier.size(if (compact) 18.dp else 20.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, color = c, fontSize = if (compact) 13.sp else 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        Icon(icon, label, tint = c, modifier = Modifier.size(if (compact) 20.dp else 20.dp))
+        if (label != null) {
+            Spacer(Modifier.width(6.dp))
+            Text(label, color = c, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        }
     }
 }

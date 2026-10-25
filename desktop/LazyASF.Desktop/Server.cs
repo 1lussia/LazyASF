@@ -54,6 +54,25 @@ public sealed class Server
             .Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork)
             .Select(a => a.Address.ToString()).Distinct().ToList();
 
+    /// <summary>Наш адрес в той же подсети, что и <paramref name="remote"/> (например, 192.168.1.8 для 192.168.1.16).</summary>
+    static IPAddress? LocalAddressFor(IPAddress remote)
+    {
+        var rb = remote.MapToIPv4().GetAddressBytes();
+        foreach (var a in NetworkInterface.GetAllNetworkInterfaces()
+                     .Where(n => n.OperationalStatus == OperationalStatus.Up)
+                     .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                     .Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork))
+        {
+            var lb = a.Address.GetAddressBytes();
+            var mb = a.IPv4Mask.GetAddressBytes();
+            if (mb.All(b => b == 255)) continue; // /32 — это VPN-туннель
+            bool same = true;
+            for (int i = 0; i < 4; i++) same &= (lb[i] & mb[i]) == (rb[i] & mb[i]);
+            if (same) return a.Address;
+        }
+        return null;
+    }
+
     public async Task Start()
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory });
@@ -88,8 +107,13 @@ public sealed class Server
             while (true)
             {
                 var r = await udp.ReceiveAsync();
-                if (Encoding.UTF8.GetString(r.Buffer).StartsWith("LAZYASF?"))
-                    await udp.SendAsync(reply, r.RemoteEndPoint);
+                if (!Encoding.UTF8.GetString(r.Buffer).StartsWith("LAZYASF?")) continue;
+                // Отвечаем с адреса той же локальной сети: иначе при включённом VPN
+                // Windows отправит ответ в туннель, и телефон его не получит.
+                var local = LocalAddressFor(r.RemoteEndPoint.Address);
+                if (local is null) { await udp.SendAsync(reply, r.RemoteEndPoint); continue; }
+                using var direct = new UdpClient(new IPEndPoint(local, 0));
+                await direct.SendAsync(reply, r.RemoteEndPoint);
             }
         }
         catch (Exception e) { Log.Write($"Обнаружение по UDP не работает: {e.Message}"); }

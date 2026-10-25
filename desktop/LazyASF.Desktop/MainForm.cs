@@ -57,6 +57,7 @@ public sealed class MainForm : Form
 
         var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 12, 0, 8) };
         buttons.Controls.Add(MakeButton("Вернуть всё как было", (_, _) => _ = Task.Run(() => _orch.Restore("кнопка на ноуте"))));
+        buttons.Controls.Add(MakeButton("Выкл. ТВ", (_, _) => _ = Task.Run(() => TvControl.PowerOff(_cfg))));
         buttons.Controls.Add(MakeButton("config.json", (_, _) => Process.Start(new ProcessStartInfo(AppConfig.FilePath) { UseShellExecute = true })));
         buttons.Controls.Add(MakeButton("В трей", (_, _) => Hide()));
         layout.Controls.Add(buttons);

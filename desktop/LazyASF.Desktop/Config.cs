@@ -10,25 +10,36 @@ public sealed class SiteConfig
     public string Url { get; set; } = "";
 }
 
-/// <summary>Что сделать с расширением YouTube после открытия сайта. ЗАГЛУШКА — ждём данные от пользователя.</summary>
+/// <summary>Что сделать с VPN-расширением перед открытием YouTube.</summary>
 public sealed class ExtensionConfig
 {
-    /// <summary>none | hotkey | click</summary>
-    public string Mode { get; set; } = "none";
-    /// <summary>Например "Alt+Shift+Y" (назначается в chrome://extensions/shortcuts).</summary>
+    /// <summary>
+    /// uia — найти иконку расширения на панели Chrome и кнопку в его окошке по названию (по умолчанию);
+    /// hotkey — нажать сочетание; click — клик по координатам; none — ничего.
+    /// </summary>
+    public string Mode { get; set; } = "uia";
+    /// <summary>Часть названия расширения (как в подсказке иконки на панели Chrome).</summary>
+    public string ToolbarName { get; set; } = "ЮБуст";
+    /// <summary>Надписи кнопки «подключить» в окошке расширения.</summary>
+    public List<string> ConnectNames { get; set; } = new() { "Verbinden", "Подключить", "Connect" };
+    /// <summary>Например "Alt+Shift+Y" (для mode=hotkey).</summary>
     public string Hotkey { get; set; } = "";
-    /// <summary>Координаты клика по иконке расширения на экране ТВ (для mode=click).</summary>
+    /// <summary>Координаты клика (для mode=click).</summary>
     public int ClickX { get; set; }
     public int ClickY { get; set; }
-    public int DelayMs { get; set; } = 4000;
-    public string Note { get; set; } = "TODO: название расширения и что именно нажимать";
+    /// <summary>Пауза после открытия окна Chrome, прежде чем трогать расширение.</summary>
+    public int DelayMs { get; set; } = 2500;
 }
 
 public sealed class TvConfig
 {
-    /// <summary>IP телевизора Samsung в домашней сети. Пусто = не пытаться выключать по сети.</summary>
+    /// <summary>Ключ SmartThings (account.smartthings.com/tokens). Пусто — не пытаться.</summary>
+    public string SmartThingsToken { get; set; } = "";
+    /// <summary>ID телевизора в SmartThings. Пусто — найдётся сам и сохранится.</summary>
+    public string SmartThingsDeviceId { get; set; } = "";
+    /// <summary>IP телевизора Samsung в домашней сети (прямое управление без облака). Пусто — не пытаться.</summary>
     public string Ip { get; set; } = "";
-    public string Model { get; set; } = "";
+    public string Model { get; set; } = "Samsung Series 5 (40)";
 }
 
 public sealed class AppConfig
@@ -43,11 +54,14 @@ public sealed class AppConfig
     public string ChromeProfileDir { get; set; } = "";
     public bool BrowserFullscreen { get; set; } = true;
 
-    public Dictionary<string, SiteConfig> Sites { get; set; } = new()
+    public Dictionary<string, SiteConfig> Sites { get; set; } = DefaultSites();
+
+    static Dictionary<string, SiteConfig> DefaultSites() => new()
     {
         ["youtube"] = new() { Title = "YouTube", Url = "https://www.youtube.com/" },
-        ["boosty"] = new() { Title = "Boosty", Url = "https://boosty.to/" },
-        ["kino"] = new() { Title = "kino.watch", Url = "https://kino.watch/" },
+        ["boosty"] = new() { Title = "Boosty", Url = "https://boosty.to/kuzma671games?isFromFeed=true" },
+        ["kino"] = new() { Title = "Kinopub", Url = "https://kino.watch/" },
+        ["taplink"] = new() { Title = "Taplink", Url = "https://taplink.cc/kuzma671" },
     };
 
     public ExtensionConfig YoutubeExtension { get; set; } = new();
@@ -94,6 +108,9 @@ public sealed class AppConfig
             Log.Write($"config.json не прочитался ({e.Message}), беру настройки по умолчанию");
             cfg = new();
         }
+        // новые сайты из обновлений появляются и в старом config.json
+        foreach (var (key, site) in DefaultSites())
+            cfg.Sites.TryAdd(key, site);
         cfg.Save();
         return cfg;
     }

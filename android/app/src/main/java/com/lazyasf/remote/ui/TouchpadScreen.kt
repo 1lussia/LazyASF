@@ -77,7 +77,7 @@ fun TouchpadScreen(vm: AppViewModel, openSheet: (Sheet) -> Unit) {
         // --- верх: домой, статус наушников, таймер
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassIconButton(Icons.Rounded.Home, "Домой", { vm.screen = Screen.Home }, size = 44.dp)
-            OutputToggle(vm.output, vm::changeOutput, Modifier.width(150.dp), compact = true)
+            OutputToggle(vm.output, vm::changeOutput, Modifier.width(112.dp), compact = true)
             val hp = session.step("headphones")
             when {
                 session.busy -> GlassIconButton(Icons.Rounded.Headphones, "Настраиваю…", {}, size = 44.dp, tint = Palette.Orange)

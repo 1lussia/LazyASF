@@ -15,15 +15,63 @@ public static class TvControl
 {
     const string AppName = "LazyASF";
 
-    public static async Task<bool> PowerOff(TvConfig tv)
+    public static async Task<bool> PowerOff(AppConfig cfg)
     {
-        if (string.IsNullOrWhiteSpace(tv.Ip)) { Log.Write("ТВ: IP не задан (tv.ip в config.json) — пропускаю"); return false; }
+        var tv = cfg.Tv;
+        if (!string.IsNullOrWhiteSpace(tv.SmartThingsToken))
+        {
+            try { if (await SmartThingsOff(cfg)) return true; }
+            catch (Exception e) { Log.Write($"SmartThings: {e.Message}"); }
+        }
+        if (string.IsNullOrWhiteSpace(tv.Ip))
+        {
+            if (string.IsNullOrWhiteSpace(tv.SmartThingsToken)) Log.Write("ТВ: нет ни ключа SmartThings, ни IP (tv в config.json) — пропускаю");
+            return false;
+        }
         foreach (var attempt in new Func<string, Task<bool>>[] { ip => Tizen(ip, false), ip => Tizen(ip, true), Legacy })
         {
             try { if (await attempt(tv.Ip)) { Log.Write("ТВ: команда выключения отправлена"); return true; } }
             catch (Exception e) { Log.Write($"ТВ: {e.GetType().Name}: {e.Message}"); }
         }
         return false;
+    }
+
+    /// <summary>Выключение через облако SmartThings — работает, даже если ТВ в другой сети.</summary>
+    static async Task<bool> SmartThingsOff(AppConfig cfg)
+    {
+        var tv = cfg.Tv;
+        using var http = new HttpClient { BaseAddress = new Uri("https://api.smartthings.com/v1/"), Timeout = TimeSpan.FromSeconds(15) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", tv.SmartThingsToken.Trim());
+
+        if (string.IsNullOrWhiteSpace(tv.SmartThingsDeviceId))
+        {
+            var resp = await http.GetAsync("devices");
+            if (!resp.IsSuccessStatusCode) { Log.Write($"SmartThings: список устройств → {(int)resp.StatusCode} (ключ истёк или без прав Devices?)"); return false; }
+            using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            foreach (var d in doc.RootElement.GetProperty("items").EnumerateArray())
+            {
+                string Prop(params string[] path)
+                {
+                    var e = d;
+                    foreach (var p in path) if (e.ValueKind != System.Text.Json.JsonValueKind.Object || !e.TryGetProperty(p, out e)) return "";
+                    return e.ValueKind == System.Text.Json.JsonValueKind.String ? e.GetString() ?? "" : "";
+                }
+                var label = Prop("label") + " " + Prop("name");
+                bool isTv = Prop("ocf", "deviceType") == "oic.d.tv" || label.Contains("TV", StringComparison.OrdinalIgnoreCase)
+                            || label.Contains("телевизор", StringComparison.OrdinalIgnoreCase);
+                if (!isTv) continue;
+                tv.SmartThingsDeviceId = Prop("deviceId");
+                Log.Write($"SmartThings: нашёл ТВ «{label.Trim()}» ({tv.SmartThingsDeviceId})");
+                cfg.Save();
+                break;
+            }
+            if (string.IsNullOrWhiteSpace(tv.SmartThingsDeviceId)) { Log.Write("SmartThings: телевизор в аккаунте не найден"); return false; }
+        }
+
+        var body = new StringContent("""{"commands":[{"component":"main","capability":"switch","command":"off"}]}""", Encoding.UTF8, "application/json");
+        var r = await http.PostAsync($"devices/{tv.SmartThingsDeviceId}/commands", body);
+        Log.Write($"SmartThings: выключить ТВ → {(int)r.StatusCode} {(r.IsSuccessStatusCode ? "OK" : await r.Content.ReadAsStringAsync())}");
+        return r.IsSuccessStatusCode;
     }
 
     static async Task<bool> Tizen(string ip, bool secure)

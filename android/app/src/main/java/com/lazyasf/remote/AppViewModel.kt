@@ -13,6 +13,7 @@ import com.lazyasf.remote.net.Conn
 import com.lazyasf.remote.net.Discovery
 import com.lazyasf.remote.net.FoundPc
 import com.lazyasf.remote.net.PcConnection
+import com.lazyasf.remote.net.WifiNet
 import com.lazyasf.remote.phone.PhoneBluetooth
 import com.lazyasf.remote.phone.SleepAlarm
 import kotlinx.coroutines.delay
@@ -25,8 +26,9 @@ enum class Screen { Connect, Home, Touchpad }
 
 enum class Site(val key: String, val title: String, val subtitle: String) {
     YouTube("youtube", "YouTube", "Видео и подписки"),
-    Boosty("boosty", "Boosty", "Авторы и посты"),
-    Kino("kino", "kino.watch", "Фильмы и сериалы"),
+    Boosty("boosty", "Boosty", "kuzma671games"),
+    Kino("kino", "Kinopub", "Фильмы и сериалы"),
+    Taplink("taplink", "Taplink", "kuzma671"),
 }
 
 sealed interface UiEvent {
@@ -36,7 +38,7 @@ sealed interface UiEvent {
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     val prefs = Prefs(app)
-    val pc = PcConnection(prefs, viewModelScope)
+    val pc = PcConnection(prefs, viewModelScope) { WifiNet.get(app)?.socketFactory }
     val events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
 
     var screen by mutableStateOf(Screen.Connect)
@@ -200,7 +202,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** dx/dy — в dp. Чем быстрее палец, тем сильнее ускорение. */
     fun move(dxDp: Float, dyDp: Float) {
         val speed = kotlin.math.sqrt(dxDp * dxDp + dyDp * dyDp)
-        val accel = 1f + min(2.2f, (speed - 1.5f).coerceAtLeast(0f) / 6f)
+        val accel = 1f + min(1.6f, (speed - 1.5f).coerceAtLeast(0f) / 8f)
         val k = sensitivity * accel
         pc.send("move", "dx" to (dxDp * k).toDouble(), "dy" to (dyDp * k).toDouble())
     }
