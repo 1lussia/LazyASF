@@ -67,7 +67,9 @@ public sealed class Orchestrator
 
     void Mark(string id, string status, string? detail = null)
     {
-        lock (_lock) { var s = Step(id); s.Status = status; s.Detail = detail; }
+        string title;
+        lock (_lock) { var s = Step(id); s.Status = status; s.Detail = detail; title = s.Title; }
+        if (status is "ok" or "fail") Log.Write($"   {(status == "ok" ? "✓" : "✗")} {title}{(detail is null ? "" : $" — {detail}")}");
         Notify();
     }
 

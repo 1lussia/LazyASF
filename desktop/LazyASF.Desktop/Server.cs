@@ -185,6 +185,13 @@ public sealed class Server
         return false;
     }
 
+    /// <summary>Фоновая задача, ошибки которой попадают в журнал, а не пропадают.</summary>
+    static void Background(Func<Task> work) => _ = Task.Run(async () =>
+    {
+        try { await work(); }
+        catch (Exception e) { Log.Write($"Ошибка: {e}"); }
+    });
+
     static double Num(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
 
@@ -220,16 +227,27 @@ public sealed class Server
                 Input.Text(Str(m, "s"));
                 break;
             case "launch":
-                _ = Task.Run(() => _orch.Launch(Str(m, "site"), Str(m, "headphones"), Str(m, "output")));
+            {
+                // Поля читаем здесь: JsonDocument освобождается сразу после Handle,
+                // а Task.Run выполнится позже — чтение внутри него падало молча.
+                string site = Str(m, "site"), hp = Str(m, "headphones"), output = Str(m, "output");
+                Background(() => _orch.Launch(site, hp, output));
                 break;
+            }
             case "headphones_connect":
-                _ = Task.Run(() => _orch.SwitchOutput("headphones", Str(m, "headphones")));
+            {
+                string hp = Str(m, "headphones");
+                Background(() => _orch.SwitchOutput("headphones", hp));
                 break;
+            }
             case "audio_output":
-                _ = Task.Run(() => _orch.SwitchOutput(Str(m, "target"), Str(m, "headphones")));
+            {
+                string target = Str(m, "target"), hp = Str(m, "headphones");
+                Background(() => _orch.SwitchOutput(target, hp));
                 break;
+            }
             case "restore":
-                _ = Task.Run(() => _orch.Restore("с телефона"));
+                Background(() => _orch.Restore("с телефона"));
                 break;
             case "sleep":
                 _orch.SetSleep((int)Num(m, "minutes"));
