@@ -20,6 +20,10 @@ public sealed class SessionState
     public bool HeadphonesConnected { get; set; }
     /// <summary>Куда звук: headphones | tv</summary>
     public string Output { get; set; } = "headphones";
+    /// <summary>AmneziaVPN на ноуте.</summary>
+    public bool VpnAvailable { get; set; }
+    public bool VpnOn { get; set; }
+    public bool VpnBusy { get; set; }
     /// <summary>Unix ms, когда сработает таймер сна; null — таймера нет.</summary>
     public long? SleepEndsAt { get; set; }
     public List<StepInfo> Steps { get; set; } = new();
@@ -41,10 +45,40 @@ public sealed class Orchestrator
     public SessionState State { get; } = new();
     public event Action? Changed;
 
+    readonly System.Threading.Timer _vpnWatch;
+
     public Orchestrator(AppConfig cfg)
     {
         _cfg = cfg;
         State.Headphones = cfg.DefaultHeadphones;
+        State.VpnAvailable = VpnControl.Installed(cfg);
+        State.VpnOn = VpnControl.IsOn();
+        // VPN могут включить и в самой Amnezia — следим, чтобы ползунок на телефоне был честным
+        _vpnWatch = new System.Threading.Timer(_ =>
+        {
+            if (State.VpnBusy) return;
+            bool on = VpnControl.IsOn();
+            if (on != State.VpnOn) { State.VpnOn = on; Notify(); }
+        }, null, 5000, 5000);
+    }
+
+    // ---------------------------------------------------------------- VPN
+    public async Task SetVpn(bool on)
+    {
+        if (State.VpnBusy) return;
+        State.VpnBusy = true;
+        Notify();
+        try
+        {
+            var (ok, detail) = await VpnControl.Set(_cfg, on);
+            Log.Write($"🛡 VPN {(on ? "вкл" : "выкл")}: {(ok ? "✓" : "✗")} {detail}");
+        }
+        finally
+        {
+            State.VpnOn = VpnControl.IsOn();
+            State.VpnBusy = false;
+            Notify();
+        }
     }
 
     void Notify() => Changed?.Invoke();
@@ -58,6 +92,7 @@ public sealed class Orchestrator
             {
                 Active = State.Active, Busy = State.Busy, Site = State.Site, Headphones = State.Headphones,
                 HeadphonesConnected = State.HeadphonesConnected, SleepEndsAt = State.SleepEndsAt, Output = State.Output,
+                VpnAvailable = State.VpnAvailable, VpnOn = State.VpnOn, VpnBusy = State.VpnBusy,
                 Steps = State.Steps.Select(s => new StepInfo { Id = s.Id, Title = s.Title, Status = s.Status, Detail = s.Detail }).ToList(),
             };
         }
@@ -83,7 +118,6 @@ public sealed class Orchestrator
             if (!string.IsNullOrWhiteSpace(headphones)) State.Headphones = headphones;
             State.Output = output == "tv" ? "tv" : "headphones";
             bool toTv = State.Output == "tv";
-            bool withExtension = siteKey == "youtube" && _cfg.YoutubeExtension.Mode != "none";
             lock (_lock)
             {
                 State.Busy = true;
@@ -93,7 +127,6 @@ public sealed class Orchestrator
                     new() { Id = "display", Title = "Только экран телевизора" },
                     new() { Id = "browser", Title = $"Открыть {site.Title}" },
                 };
-                if (withExtension) State.Steps.Add(new() { Id = "extension", Title = "VPN для YouTube (ЮБуст)" });
                 ResetOutputSteps(toTv);
             }
             Notify();
@@ -111,26 +144,19 @@ public sealed class Orchestrator
             // 1. экран
             Mark("display", "running");
             if (Display.Current() == Display.Topology.External) Mark("display", "ok", "уже включено");
-            else if (Display.Set(Display.Topology.External)) { await Task.Delay(2500); Mark("display", "ok"); }
-            else Mark("display", "fail", "Не переключилось — ТВ подключён по HDMI?");
+            else if (await Display.SetWithRetry(Display.Topology.External)) Mark("display", "ok");
+            else Mark("display", "fail", "Не переключилось — телевизор включён и подключён по HDMI?");
 
             // 2. браузер
             Mark("browser", "running");
             var window = await Chrome.Open(_cfg, site.Url);
             Mark("browser", window is null ? "fail" : "ok");
 
-            // 3. VPN-расширение для YouTube: подключаем, потом обновляем страницу
-            if (withExtension && window is { } win)
+            if (_cfg.BrowserFullscreen && window is { } w && w != IntPtr.Zero)
             {
-                Mark("extension", "running");
-                await Task.Delay(_cfg.YoutubeExtension.DelayMs);
-                var (ok, detail) = await RunExtension(win);
-                Mark("extension", ok ? "ok" : "fail", detail);
-                if (ok && win != IntPtr.Zero && Win.Activate(win)) { Input.Combo("f5"); await Task.Delay(1500); }
+                await Task.Delay(800);
+                if (!Chrome.Fullscreen(w)) Log.Write("Полный экран не включился — долгое нажатие ⛶ на тачпаде (F11)");
             }
-            else if (withExtension) Mark("extension", "skip");
-
-            if (_cfg.BrowserFullscreen && window is { } w && w != IntPtr.Zero) Chrome.Fullscreen(w);
 
             // 4. звук
             if (toTv) await ConnectTvAudio();
@@ -177,14 +203,9 @@ public sealed class Orchestrator
             ResetOutputSteps(toTv);
             Notify();
             Log.Write($"🔊 Звук → {(toTv ? "телевизор" : State.Headphones)}");
-            if (toTv)
-            {
-                await ConnectTvAudio();
-                // отпускаем наушники, чтобы телефон мог их забрать
-                foreach (var ep in Audio.FindHeadphones(State.Headphones).Where(e => e.Active))
-                    Audio.BtOneShot(ep, connect: false);
-                State.HeadphonesConnected = false;
-            }
+            // Наушники при переходе на ТВ остаются подключены к ноуту — обратно переключается мгновенно.
+            // Телефону они возвращаются только по «Вернуть всё».
+            if (toTv) await ConnectTvAudio();
             else await ConnectHeadphones();
         }
         catch (Exception e) { Log.Write($"Ошибка переключения звука: {e}"); }
@@ -193,25 +214,6 @@ public sealed class Orchestrator
             State.Busy = false;
             Notify();
             _gate.Release();
-        }
-    }
-
-    async Task<(bool ok, string? detail)> RunExtension(IntPtr window)
-    {
-        var ext = _cfg.YoutubeExtension;
-        switch (ext.Mode)
-        {
-            case "uia":
-                return window == IntPtr.Zero ? (false, "окно Chrome не найдено") : await ExtensionAutomation.Connect(window, ext);
-            case "hotkey" when !string.IsNullOrWhiteSpace(ext.Hotkey):
-                return (Input.Combo(ext.Hotkey), null);
-            case "click":
-                Input.MoveTo(ext.ClickX, ext.ClickY);
-                await Task.Delay(150);
-                Input.Click();
-                return (true, null);
-            default:
-                return (false, "не настроено");
         }
     }
 
@@ -238,33 +240,47 @@ public sealed class Orchestrator
     async Task ConnectHeadphones()
     {
         Mark("bluetooth", "running");
+        bool wasOn = await Bluetooth.IsOn() == true;
         if (!await Bluetooth.SetOn(true)) { Mark("bluetooth", "fail", "Не удалось включить"); Mark("headphones", "skip"); Mark("audio", "skip"); return; }
         Mark("bluetooth", "ok");
-        await Task.Delay(1500);
 
-        Mark("headphones", "running", "Жду наушники…");
         var name = State.Headphones;
-        var deadline = DateTime.UtcNow.AddSeconds(_cfg.HeadphonesConnectTimeoutSec);
-        bool serviceToggled = false;
-        int attempt = 0;
-        AudioEndpoint? active = null;
-        while (DateTime.UtcNow < deadline)
+        AudioEndpoint? Active()
         {
             var eps = Audio.FindHeadphones(name);
-            active = eps.FirstOrDefault(e => e.Active && !e.IsHandsFree) ?? eps.FirstOrDefault(e => e.Active);
-            if (active is not null) break;
+            return eps.FirstOrDefault(e => e.Active && !e.IsHandsFree) ?? eps.FirstOrDefault(e => e.Active);
+        }
+        async Task<AudioEndpoint?> WaitActive(int ms)
+        {
+            for (var until = DateTime.UtcNow.AddMilliseconds(ms); DateTime.UtcNow < until; await Task.Delay(400))
+                if (Active() is { } a) return a;
+            return null;
+        }
 
-            attempt++;
-            var target = eps.FirstOrDefault(e => !e.IsHandsFree) ?? eps.FirstOrDefault();
-            bool kicked = target is not null && Audio.BtOneShot(target, connect: true);
-            if ((!kicked || attempt >= 3) && !serviceToggled)
+        // уже подключены (например, переключаемся обратно с ТВ) — сразу к звуку
+        var active = Active();
+        if (active is null)
+        {
+            Mark("headphones", "running", "Жду наушники…");
+            if (!wasOn) await Task.Delay(1500);
+            var deadline = DateTime.UtcNow.AddSeconds(_cfg.HeadphonesConnectTimeoutSec);
+            bool serviceToggled = false;
+            for (int attempt = 1; active is null && DateTime.UtcNow < deadline; attempt++)
             {
-                serviceToggled = true;
-                Mark("headphones", "running", "Пробую через службу Bluetooth…");
-                await Task.Run(() => Bluetooth.ToggleAudioService(name));
+                var eps = Audio.FindHeadphones(name);
+                var target = eps.FirstOrDefault(e => !e.IsHandsFree) ?? eps.FirstOrDefault();
+                bool kicked = target is not null && Audio.BtOneShot(target, connect: true);
+                Mark("headphones", "running", $"Попытка {attempt}…");
+                active = await WaitActive(kicked ? 3500 : 500);
+                if (active is null && !serviceToggled)
+                {
+                    // обычный «Подключить» не сработал — перезапускаем аудиослужбу наушников, это надёжнее
+                    serviceToggled = true;
+                    Mark("headphones", "running", "Пробую через службу Bluetooth…");
+                    await Task.Run(() => Bluetooth.ToggleAudioService(name));
+                    active = await WaitActive(6000);
+                }
             }
-            else Mark("headphones", "running", $"Попытка {attempt}…");
-            await Task.Delay(4000);
         }
 
         if (active is null)
@@ -278,8 +294,8 @@ public sealed class Orchestrator
         Mark("headphones", "ok", active.Name);
 
         Mark("audio", "running");
-        await Task.Delay(800);
-        Mark("audio", Audio.SetDefault(active.Id) ? "ok" : "fail");
+        await Task.Delay(500);
+        Mark("audio", Audio.SetDefault(active.Id) ? "ok" : "fail", active.Name);
     }
 
     // ---------------------------------------------------------------- restore
@@ -305,7 +321,7 @@ public sealed class Orchestrator
 
             var topo = _prevTopology is Display.Topology.Unknown or Display.Topology.External
                 ? Display.Topology.Internal : _prevTopology;
-            if (State.Active || Display.Current() == Display.Topology.External) Display.Set(topo);
+            if (State.Active || Display.Current() == Display.Topology.External) await Display.SetWithRetry(topo);
 
             State.Active = false;
             State.Site = null;

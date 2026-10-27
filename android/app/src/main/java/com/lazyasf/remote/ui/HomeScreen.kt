@@ -22,8 +22,14 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Mouse
 import androidx.compose.material.icons.rounded.SettingsBackupRestore
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +47,27 @@ import com.lazyasf.remote.Site
 import com.lazyasf.remote.net.Conn
 
 enum class Sheet { None, Sleep, Headphones, Settings, Keyboard }
+
+/** Ползунок AmneziaVPN на ноуте. Пока Amnezia переключается — крутилка вместо щита. */
+@Composable
+fun VpnSwitch(on: Boolean, busy: Boolean, onChange: (Boolean) -> Unit) {
+    GlassSurface(Modifier.height(46.dp), radius = 23.dp) {
+        Row(Modifier.fillMaxHeight().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (busy) Spinner(Modifier.size(16.dp))
+            else Icon(Icons.Rounded.Shield, null, tint = if (on) Palette.Ok else Palette.TextDim, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("VPN", color = Palette.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Switch(
+                checked = on, onCheckedChange = onChange, enabled = !busy,
+                modifier = Modifier.scale(0.78f),
+                colors = SwitchDefaults.colors(
+                    checkedTrackColor = Palette.Ok.copy(alpha = 0.8f), checkedThumbColor = Color.White,
+                    uncheckedTrackColor = Color.White.copy(alpha = 0.1f), uncheckedBorderColor = Color.White.copy(alpha = 0.3f),
+                ),
+            )
+        }
+    }
+}
 
 @Composable
 fun HomeScreen(vm: AppViewModel, onLaunch: (Site) -> Unit, openSheet: (Sheet) -> Unit) {
@@ -63,8 +90,12 @@ fun HomeScreen(vm: AppViewModel, onLaunch: (Site) -> Unit, openSheet: (Sheet) ->
                 is Conn.Connecting -> "Подключаюсь…" to Palette.Orange
                 else -> "Нет связи" to Palette.Fail
             }
-            GlassChip(label, null, onClick = {}, dot = dot)
-            Spacer(Modifier.weight(1f))
+            Box(Modifier.weight(1f)) { GlassChip(label, null, onClick = {}, dot = dot) }
+            if (session.vpnAvailable) {
+                Spacer(Modifier.width(8.dp))
+                VpnSwitch(session.vpnOn, session.vpnBusy, vm::setVpn)
+            }
+            Spacer(Modifier.width(8.dp))
             GlassIconButton(Icons.Rounded.Tune, "Настройки", { openSheet(Sheet.Settings) }, size = 46.dp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

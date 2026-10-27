@@ -62,13 +62,21 @@ public static class Chrome
         return IntPtr.Zero;
     }
 
-    /// <summary>Полный экран (F11) для окна.</summary>
-    public static void Fullscreen(IntPtr window)
+    /// <summary>Полный экран (F11) для окна. false — окно не удалось сделать активным.</summary>
+    public static bool Fullscreen(IntPtr window)
     {
-        if (window == IntPtr.Zero) return;
-        Native.Win.Activate(window);
-        Thread.Sleep(300);
-        if (Native.Win.IsForeground(window)) Native.Input.Combo("f11");
-        else Log.Write("Не смог сделать Chrome активным — полный экран не включён (F11 с телефона)");
+        if (window == IntPtr.Zero) return false;
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            Native.Win.Activate(window);
+            Thread.Sleep(300);
+            if (Native.Win.IsForeground(window))
+            {
+                Native.Input.Combo("f11");
+                return true;
+            }
+            Thread.Sleep(500);
+        }
+        return false;
     }
 }

@@ -10,29 +10,6 @@ public sealed class SiteConfig
     public string Url { get; set; } = "";
 }
 
-/// <summary>Что сделать с VPN-расширением перед открытием YouTube.</summary>
-public sealed class ExtensionConfig
-{
-    /// <summary>
-    /// uia — найти иконку расширения на панели Chrome и кнопку в его окошке по названию (по умолчанию);
-    /// hotkey — нажать сочетание; click — клик по координатам; none — ничего.
-    /// </summary>
-    public string Mode { get; set; } = "uia";
-    /// <summary>Часть названия расширения (как в подсказке иконки на панели Chrome).</summary>
-    public string ToolbarName { get; set; } = "ЮБуст";
-    /// <summary>Начала слов на кнопке «подключить» в окошке расширения (на любом языке интерфейса).</summary>
-    public List<string> ConnectNames { get; set; } = new() { "Подключ", "Verbind", "Connect", "Включить" };
-    /// <summary>Кнопки с такими словами не нажимаем никогда.</summary>
-    public List<string> NeverClick { get; set; } = new() { "Отключ", "Trenn", "Disconnect", "Premium", "Премиум", "Abonnement", "Подписк", "Telegram", "Hilfe", "Помощь" };
-    /// <summary>Например "Alt+Shift+Y" (для mode=hotkey).</summary>
-    public string Hotkey { get; set; } = "";
-    /// <summary>Координаты клика (для mode=click).</summary>
-    public int ClickX { get; set; }
-    public int ClickY { get; set; }
-    /// <summary>Пауза после открытия окна Chrome, прежде чем трогать расширение.</summary>
-    public int DelayMs { get; set; } = 2500;
-}
-
 public sealed class TvConfig
 {
     /// <summary>Ключ SmartThings (account.smartthings.com/tokens). Пусто — не пытаться.</summary>
@@ -66,7 +43,8 @@ public sealed class AppConfig
         ["taplink"] = new() { Title = "Taplink", Url = "https://taplink.cc/kuzma671" },
     };
 
-    public ExtensionConfig YoutubeExtension { get; set; } = new();
+    /// <summary>AmneziaVPN на ноуте — для ползунка VPN на телефоне.</summary>
+    public string AmneziaPath { get; set; } = @"C:\Program Files\AmneziaVPN\AmneziaVPN.exe";
 
     /// <summary>Наушники по умолчанию (подстрока имени Bluetooth-устройства).</summary>
     public string DefaultHeadphones { get; set; } = "REDMI Buds 8 Pro";

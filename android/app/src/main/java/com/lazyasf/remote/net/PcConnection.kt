@@ -35,6 +35,9 @@ data class Session(
     val headphonesConnected: Boolean = false,
     val sleepEndsAt: Long? = null,
     val output: String = "headphones",
+    val vpnAvailable: Boolean = false,
+    val vpnOn: Boolean = false,
+    val vpnBusy: Boolean = false,
     val steps: List<Step> = emptyList(),
 ) {
     fun step(id: String) = steps.firstOrNull { it.id == id }
@@ -234,6 +237,9 @@ class PcConnection(
             headphonesConnected = s.optBoolean("headphonesConnected"),
             sleepEndsAt = if (s.isNull("sleepEndsAt")) null else s.optLong("sleepEndsAt"),
             output = s.optString("output", "headphones"),
+            vpnAvailable = s.optBoolean("vpnAvailable"),
+            vpnOn = s.optBoolean("vpnOn"),
+            vpnBusy = s.optBoolean("vpnBusy"),
             steps = steps,
         )
     }

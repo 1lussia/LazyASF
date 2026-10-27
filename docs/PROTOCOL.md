@@ -23,6 +23,7 @@
 | `text` | `s` | ввод текста (Unicode) |
 | `launch` | `site`: youtube/boosty/kino, `headphones`, `output`: headphones/tv | режим ТВ |
 | `audio_output` | `target`: headphones/tv, `headphones` | переключить звук на лету |
+| `vpn` | `on`: bool | включить/выключить AmneziaVPN на ноуте |
 | `headphones_connect` | `headphones` | только переподключить наушники |
 | `restore` | — | вернуть всё как было |
 | `sleep` | `minutes` | таймер сна |
@@ -31,6 +32,6 @@
 | `ping` | — | `pong` |
 
 ## Сообщения ноута
-- `{"t":"state","state":{"active","busy","site","headphones","headphonesConnected","sleepEndsAt","output","steps":[{"id","title","status","detail"}]}}`
+- `{"t":"state","state":{"active","busy","site","headphones","headphonesConnected","sleepEndsAt","output","vpnAvailable","vpnOn","vpnBusy","steps":[{"id","title","status","detail"}]}}`
   — `status`: pending | running | ok | fail | skip.
 - `{"t":"devices","devices":["REDMI Buds 8 Pro", …],"default":"REDMI Buds 8 Pro"}`

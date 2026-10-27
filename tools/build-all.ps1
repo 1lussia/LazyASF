@@ -11,7 +11,8 @@ Remove-Item "$root\dist\LazyASF-PC\*.pdb" -ErrorAction SilentlyContinue
 Copy-Item "$root\tools\allow-firewall.cmd" "$root\dist\LazyASF-PC\" -Force
 
 Push-Location "$root\android"
-.\gradlew.bat assembleRelease --console=plain
+# --no-daemon: фоновый Gradle иначе держит вывод скрипта открытым, и тот «висит» после сборки
+.\gradlew.bat assembleRelease --console=plain --no-daemon
 Pop-Location
 Copy-Item "$root\android\app\build\outputs\apk\release\app-release.apk" "$root\dist\LazyASF-phone.apk" -Force
 Write-Host "Готово: $root\dist"

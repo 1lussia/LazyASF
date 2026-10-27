@@ -17,6 +17,12 @@ public static class Win
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
 
     public static string Title(IntPtr h)
     {
@@ -56,6 +62,32 @@ public static class Win
         ShowWindow(h, 3); // SW_MAXIMIZE
         BringWindowToTop(h);
         SetForegroundWindow(h);
+        if (IsForeground(h)) return true;
+
+        // привязываемся к потоку окна, у которого сейчас фокус, — так Windows тоже разрешает
+        uint fgThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+        uint me = GetCurrentThreadId();
+        if (fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true))
+        {
+            BringWindowToTop(h);
+            SetForegroundWindow(h);
+            AttachThreadInput(me, fgThread, false);
+        }
+        if (IsForeground(h)) return true;
+
+        // последний способ: настоящий клик в пустое место полосы вкладок (правее вкладок, левее кнопок окна)
+        if (GetWindowRect(h, out var r))
+        {
+            double scale = Math.Max(1, GetDpiForWindow(h)) / 96.0;
+            int x = r.Right - (int)(260 * scale);
+            int y = Math.Max(r.Top, 0) + (int)(14 * scale);
+            Input.MoveTo(x, y);
+            Thread.Sleep(80);
+            Input.Click();
+            Thread.Sleep(250);
+            // курсор — в центр экрана, чтобы сразу двигать им с телефона
+            Input.MoveTo((r.Left + r.Right) / 2, (r.Top + r.Bottom) / 2);
+        }
         return IsForeground(h);
     }
 }

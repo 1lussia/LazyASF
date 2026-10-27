@@ -151,15 +151,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             reconnectHeadphones()
             return
         }
-        viewModelScope.launch {
-            if (!cmd("audio_output", "target" to "tv")) return@launch
-            // ноут переводит звук на ТВ и отпускает наушники — телефон забирает их обратно
-            delay(4000)
-            if (prefs.btDisabledByApp) {
-                PhoneBluetooth.setOn(getApplication(), true)
-                prefs.btDisabledByApp = false
-            }
-        }
+        // наушники остаются у ноута (просто молчат) — обратно на них переключится мгновенно;
+        // телефону они вернутся по «Вернуть всё»
+        cmd("audio_output", "target" to "tv")
     }
 
     fun reconnectHeadphones() {
@@ -186,6 +180,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onResume() = pc.ensureAlive()
+
+    /** AmneziaVPN на ноуте. */
+    fun setVpn(on: Boolean) = cmd("vpn", "on" to on)
 
     fun restore() {
         if (!cmd("restore")) return

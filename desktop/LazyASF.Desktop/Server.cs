@@ -240,6 +240,12 @@ public sealed class Server
                 Background(() => _orch.SwitchOutput("headphones", hp));
                 break;
             }
+            case "vpn":
+            {
+                bool on = m.TryGetProperty("on", out var v) && v.ValueKind == JsonValueKind.True;
+                Background(() => _orch.SetVpn(on));
+                break;
+            }
             case "audio_output":
             {
                 string target = Str(m, "target"), hp = Str(m, "headphones");

@@ -36,5 +36,26 @@ public static class Display
         return rc == 0;
     }
 
+    /// <summary>
+    /// С повторами: телевизор, который только что включили или вывели из сна, первые секунды
+    /// не отвечает по HDMI, и Windows возвращает ошибку 31. Под конец пробуем DisplaySwitch (как Win+P).
+    /// </summary>
+    public static async Task<bool> SetWithRetry(Topology t)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (Set(t)) { await Task.Delay(2500); return true; }
+            await Task.Delay(2000);
+        }
+        var arg = t switch { Topology.Internal => "/internal", Topology.Clone => "/clone", Topology.Extend => "/extend", _ => "/external" };
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("DisplaySwitch.exe", arg) { UseShellExecute = false, CreateNoWindow = true });
+            await Task.Delay(4000);
+        }
+        catch (Exception e) { Log.Write($"DisplaySwitch: {e.Message}"); }
+        return Current() == t;
+    }
+
     public static int ScreenCount => Screen.AllScreens.Length;
 }

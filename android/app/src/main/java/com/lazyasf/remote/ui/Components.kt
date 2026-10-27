@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,7 +93,7 @@ fun GlassChip(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: M
                 Icon(icon, null, tint = Palette.Text, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
             }
-            Text(text, color = Palette.Text, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(text, color = Palette.Text, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
