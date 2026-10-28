@@ -50,7 +50,13 @@ public static class Chrome
         var before = Native.Win.ChromeWindows();
         var profile = ProfileDir(cfg);
         Log.Write($"Chrome [{profile}]: {url}");
-        Process.Start(new ProcessStartInfo(exe, $"--profile-directory=\"{profile}\" --new-window --start-maximized \"{url}\"") { UseShellExecute = false });
+        var args = $"--profile-directory=\"{profile}\" --new-window --start-maximized \"{url}\"";
+        // от имени Проводника — иначе Chrome унаследует исключение LazyASF из VPN (см. ProcessLauncher)
+        if (!Native.ProcessLauncher.StartAsChildOf("explorer", exe, args))
+        {
+            Log.Write("Не смог запустить Chrome от имени Проводника — запускаю напрямую (он может пойти мимо VPN)");
+            Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false });
+        }
 
         for (int i = 0; i < 50; i++)
         {

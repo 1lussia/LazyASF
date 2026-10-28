@@ -9,6 +9,12 @@ static class Program
     {
         // Диагностика без окна: LazyASF.exe --diag  → пишет в log.txt устройства звука/Bluetooth/экраны
         if (args.Contains("--diag")) { Diag(); return 0; }
+        // Проверка запуска Chrome без режима ТВ: LazyASF.exe --open https://...
+        if (args.Length == 2 && args[0] == "--open")
+        {
+            var w = Chrome.Open(AppConfig.Load(), args[1]).GetAwaiter().GetResult();
+            return w is null ? 1 : 0;
+        }
 
         using var mutex = new Mutex(true, "LazyASF.SingleInstance", out bool first);
         if (!first) { MessageBox.Show("LazyASF уже запущен — ищи значок в трее.", "LazyASF"); return 1; }
