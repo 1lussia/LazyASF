@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lazyasf.remote.data.Prefs
+import com.lazyasf.remote.net.Bookmark
 import com.lazyasf.remote.net.Conn
 import com.lazyasf.remote.net.Discovery
 import com.lazyasf.remote.net.FoundPc
@@ -112,8 +113,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ------------------------------------------------------------ сценарии
-    fun launch(site: Site) {
-        if (launching != null) return
+    fun launch(site: Site) = startLaunch(site, site.key, null, null)
+
+    private var launchBusy = false
+
+    private fun startLaunch(site: Site?, key: String, url: String?, title: String?) {
+        if (launchBusy) return
+        launchBusy = true
         launching = site
         viewModelScope.launch {
             try {
@@ -129,7 +135,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         events.tryEmit(UiEvent.OpenBluetoothSettings)
                     }
                 }
-                if (!pc.send("launch", "site" to site.key, "headphones" to (headphones ?: pc.defaultDevice.value), "output" to output))
+                if (!pc.send("launch", "site" to key, "headphones" to (headphones ?: pc.defaultDevice.value), "output" to output,
+                        "url" to url, "title" to title))
                     events.tryEmit(UiEvent.Toast("Нет связи с ноутом"))
                 else {
                     delay(600)
@@ -137,8 +144,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } finally {
                 launching = null
+                launchBusy = false
             }
         }
+    }
+
+    // ------------------------------------------------------------ закладки (хранятся на ноуте)
+    fun requestPageInfo() {
+        pc.clearPageInfo()
+        cmd("page_info")
+    }
+
+    fun addBookmark(name: String, url: String) {
+        if (cmd("bookmark_add", "name" to name.trim(), "url" to url.trim()))
+            events.tryEmit(UiEvent.Toast("Закладка «${name.trim().ifEmpty { url }}» сохранена"))
+    }
+
+    fun deleteBookmark(url: String) = cmd("bookmark_delete", "url" to url)
+
+    /** Режим ТВ уже идёт — открываем в текущем окне; иначе запускаем как кнопку сайта. */
+    fun openBookmark(b: Bookmark) {
+        if (pc.session.value.active) {
+            if (cmd("bookmark_open", "url" to b.url)) screen = Screen.Touchpad
+        } else startLaunch(null, "bookmark", b.url, b.name)
     }
 
     /** "headphones" | "tv". Если режим ТВ уже идёт — переключаем звук сразу. */
@@ -181,6 +209,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onResume() = pc.ensureAlive()
 
+    // Wi-Fi в режиме низкой задержки, пока открыт тачпад: без него телефон экономит энергию
+    // и отправляет пакеты рывками.
+    private val wifiLock = (app.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager)
+        .createWifiLock(
+            if (android.os.Build.VERSION.SDK_INT >= 29) android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            else @Suppress("DEPRECATION") android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+            "lazyasf:touchpad",
+        ).apply { setReferenceCounted(false) }
+
+    fun lowLatency(on: Boolean) = runCatching { if (on) wifiLock.acquire() else if (wifiLock.isHeld) wifiLock.release() }
+
+    override fun onCleared() {
+        lowLatency(false)
+        super.onCleared()
+    }
+
     /** AmneziaVPN на ноуте. */
     fun setVpn(on: Boolean) = cmd("vpn", "on" to on)
 
@@ -216,7 +260,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** dx/dy — в dp. Чем быстрее палец, тем сильнее ускорение. */
     fun move(dxDp: Float, dyDp: Float) {
         val speed = kotlin.math.sqrt(dxDp * dxDp + dyDp * dyDp)
-        val accel = 1f + min(1.6f, (speed - 1.5f).coerceAtLeast(0f) / 8f)
+        // кривая из первой версии — с ней курсор был «идеальным»
+        val accel = 1f + min(2.2f, (speed - 1.5f).coerceAtLeast(0f) / 6f)
         val k = sensitivity * accel
         cmd("move", "dx" to (dxDp * k).toDouble(), "dy" to (dyDp * k).toDouble())
     }

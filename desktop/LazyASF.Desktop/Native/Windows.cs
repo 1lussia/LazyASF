@@ -31,10 +31,10 @@ public static class Win
         return sb.ToString();
     }
 
-    /// <summary>Видимые окна браузера Chrome (главные, с заголовком).</summary>
-    public static HashSet<IntPtr> ChromeWindows()
+    /// <summary>Видимые окна браузера Chrome (главные, с заголовком) — сверху вниз, первое — верхнее.</summary>
+    public static List<IntPtr> ChromeWindows()
     {
-        var set = new HashSet<IntPtr>();
+        var set = new List<IntPtr>();
         EnumWindows((h, _) =>
         {
             if (!IsWindowVisible(h)) return true;
@@ -55,7 +55,11 @@ public static class Win
     /// Вывести окно вперёд. Windows не даёт фоновым программам забирать фокус,
     /// но разрешает тому, кто прислал последнее событие ввода, — поэтому сначала «нажимаем» Alt.
     /// </summary>
-    public static bool Activate(IntPtr h)
+    /// <param name="allowClick">
+    /// Разрешить последний способ — клик по полосе вкладок. Нельзя, когда окно уже на весь экран:
+    /// полосы вкладок там нет, и клик попал бы в сайт.
+    /// </param>
+    public static bool Activate(IntPtr h, bool allowClick = true)
     {
         if (IsForeground(h)) return true;
         Input.Combo("alt");
@@ -73,7 +77,7 @@ public static class Win
             SetForegroundWindow(h);
             AttachThreadInput(me, fgThread, false);
         }
-        if (IsForeground(h)) return true;
+        if (IsForeground(h) || !allowClick) return IsForeground(h);
 
         // последний способ: настоящий клик в пустое место полосы вкладок (правее вкладок, левее кнопок окна)
         if (GetWindowRect(h, out var r))

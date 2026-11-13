@@ -24,6 +24,11 @@
 | `launch` | `site`: youtube/boosty/kino, `headphones`, `output`: headphones/tv | режим ТВ |
 | `audio_output` | `target`: headphones/tv, `headphones` | переключить звук на лету |
 | `vpn` | `on`: bool | включить/выключить AmneziaVPN на ноуте |
+| `page_info` | — | ответ `{"t":"page_info","ok","url","title"}` — открытая страница Chrome |
+| `bookmark_add` | `name`, `url` | сохранить закладку (в config.json ноута) |
+| `bookmark_delete` | `url` | удалить закладку |
+| `bookmark_open` | `url` | открыть в текущем окне Chrome |
+| `launch` с `site`: `bookmark` | `url`, `title` | режим ТВ сразу с закладкой |
 | `headphones_connect` | `headphones` | только переподключить наушники |
 | `restore` | — | вернуть всё как было |
 | `sleep` | `minutes` | таймер сна |
@@ -35,3 +40,4 @@
 - `{"t":"state","state":{"active","busy","site","headphones","headphonesConnected","sleepEndsAt","output","vpnAvailable","vpnOn","vpnBusy","steps":[{"id","title","status","detail"}]}}`
   — `status`: pending | running | ok | fail | skip.
 - `{"t":"devices","devices":["REDMI Buds 8 Pro", …],"default":"REDMI Buds 8 Pro"}`
+- `{"t":"bookmarks","items":[{"name","url"}, …]}` — после входа и при каждом изменении.

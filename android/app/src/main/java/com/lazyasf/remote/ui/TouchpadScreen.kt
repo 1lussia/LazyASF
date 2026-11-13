@@ -23,6 +23,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Fullscreen
@@ -62,7 +64,11 @@ fun TouchpadScreen(vm: AppViewModel, openSheet: (Sheet) -> Unit) {
     val countdown = rememberCountdown(session.sleepEndsAt)
     DisposableEffect(Unit) {
         view.keepScreenOn = true
-        onDispose { view.keepScreenOn = false }
+        vm.lowLatency(true)
+        onDispose {
+            view.keepScreenOn = false
+            vm.lowLatency(false)
+        }
     }
     BackHandler { vm.screen = Screen.Home }
     val tick = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
@@ -74,17 +80,16 @@ fun TouchpadScreen(vm: AppViewModel, openSheet: (Sheet) -> Unit) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // --- верх: домой, статус наушников, таймер
+        // --- верх: домой, звук, закладки, таймер
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassIconButton(Icons.Rounded.Home, "Домой", { vm.screen = Screen.Home }, size = 44.dp)
             OutputToggle(vm.output, vm::changeOutput, Modifier.width(112.dp), compact = true)
-            val hp = session.step("headphones")
-            when {
-                session.busy -> GlassIconButton(Icons.Rounded.Headphones, "Настраиваю…", {}, size = 44.dp, tint = Palette.Orange)
-                hp?.status == "fail" -> GlassIconButton(Icons.Rounded.Refresh, "Повторить наушники", vm::reconnectHeadphones, size = 44.dp, tint = Palette.Fail)
-            }
+            GlassIconButton(Icons.Rounded.BookmarkAdd, "Добавить в закладки", { openSheet(Sheet.BookmarkAdd) }, size = 44.dp)
+            GlassIconButton(Icons.Rounded.Bookmarks, "Закладки", { openSheet(Sheet.Bookmarks) }, size = 44.dp)
             Spacer(Modifier.weight(1f))
-            GlassChip(countdown ?: "Сон", Icons.Rounded.Bedtime, { openSheet(Sheet.Sleep) })
+            // без таймера — просто луна; с таймером — оставшееся время
+            if (countdown == null) GlassIconButton(Icons.Rounded.Bedtime, "Таймер сна", { openSheet(Sheet.Sleep) }, size = 44.dp)
+            else GlassChip(countdown, null, { openSheet(Sheet.Sleep) })
         }
 
         // --- ЛКМ / ПКМ

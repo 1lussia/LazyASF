@@ -10,6 +10,12 @@ public sealed class SiteConfig
     public string Url { get; set; } = "";
 }
 
+public sealed class Bookmark
+{
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+}
+
 public sealed class TvConfig
 {
     /// <summary>Ключ SmartThings (account.smartthings.com/tokens). Пусто — не пытаться.</summary>
@@ -56,6 +62,8 @@ public sealed class AppConfig
     /// <summary>Что делать ноуту, когда сработал таймер сна: sleep | hibernate | shutdown | none</summary>
     public string SleepTimerPowerAction { get; set; } = "shutdown";
     public TvConfig Tv { get; set; } = new();
+
+    public List<Bookmark> Bookmarks { get; set; } = new();
 
     public List<string> PairedTokens { get; set; } = new();
 

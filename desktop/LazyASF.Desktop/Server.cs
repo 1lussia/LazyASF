@@ -100,14 +100,25 @@ public sealed class Server
     // ---------------------------------------------------------------- discovery
     async Task DiscoveryLoop()
     {
-        try
+        // При автозапуске сеть может ещё не подняться — тогда порт не открывается. Пробуем снова, а не сдаёмся.
+        while (true)
         {
-            using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, _cfg.DiscoveryPort)) { EnableBroadcast = true };
-            var reply = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { app = "LazyASF", name = Environment.MachineName, port = _cfg.Port }));
-            while (true)
+            try { await DiscoveryOnce(); }
+            catch (Exception e) { Log.Write($"Обнаружение по UDP: {e.Message} — повтор через 10 с"); }
+            await Task.Delay(10_000);
+        }
+    }
+
+    async Task DiscoveryOnce()
+    {
+        using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, _cfg.DiscoveryPort)) { EnableBroadcast = true };
+        var reply = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { app = "LazyASF", name = Environment.MachineName, port = _cfg.Port }));
+        while (true)
+        {
+            var r = await udp.ReceiveAsync();
+            if (!Encoding.UTF8.GetString(r.Buffer).StartsWith("LAZYASF?")) continue;
+            try
             {
-                var r = await udp.ReceiveAsync();
-                if (!Encoding.UTF8.GetString(r.Buffer).StartsWith("LAZYASF?")) continue;
                 // Отвечаем с адреса той же локальной сети: иначе при включённом VPN
                 // Windows отправит ответ в туннель, и телефон его не получит.
                 var local = LocalAddressFor(r.RemoteEndPoint.Address);
@@ -115,8 +126,12 @@ public sealed class Server
                 using var direct = new UdpClient(new IPEndPoint(local, 0));
                 await direct.SendAsync(reply, r.RemoteEndPoint);
             }
+            catch
+            {
+                // адрес сети успел смениться (Wi-Fi переподключился) — отвечаем как получится, но поиск не роняем
+                try { await udp.SendAsync(reply, r.RemoteEndPoint); } catch { }
+            }
         }
-        catch (Exception e) { Log.Write($"Обнаружение по UDP не работает: {e.Message}"); }
     }
 
     // ---------------------------------------------------------------- clients
@@ -145,6 +160,7 @@ public sealed class Server
                     ClientsChanged?.Invoke();
                     await Send(client, StateMessage());
                     await Send(client, DevicesMessage());
+                    await Send(client, BookmarksMessage());
                     continue;
                 }
                 Handle(client, t, root);
@@ -203,6 +219,8 @@ public sealed class Server
         switch (t)
         {
             case "move":
+                // Одно событие мыши на сообщение — как в первой версии. Дробить на шаги по 1 px нельзя:
+                // при «Повышенной точности указателя» Windows замедляет мелкие шаги, и курсор идёт рывками.
                 c.AccX += Num(m, "dx"); c.AccY += Num(m, "dy");
                 int ix = (int)c.AccX, iy = (int)c.AccY;
                 c.AccX -= ix; c.AccY -= iy;
@@ -231,7 +249,43 @@ public sealed class Server
                 // Поля читаем здесь: JsonDocument освобождается сразу после Handle,
                 // а Task.Run выполнится позже — чтение внутри него падало молча.
                 string site = Str(m, "site"), hp = Str(m, "headphones"), output = Str(m, "output");
-                Background(() => _orch.Launch(site, hp, output));
+                string url = Str(m, "url"), title = Str(m, "title");
+                Background(() => _orch.Launch(site, hp, output, url, title));
+                break;
+            }
+            // ----- закладки (хранятся на ноуте в config.json)
+            case "page_info":
+                Background(async () =>
+                {
+                    var page = await Task.Run(Chrome.CurrentPage);
+                    await Send(c, new { t = "page_info", ok = page is not null, url = page?.url ?? "", title = page?.title ?? "" });
+                });
+                break;
+            case "bookmark_add":
+            {
+                string name = Str(m, "name").Trim(), url = Str(m, "url").Trim();
+                if (url.Length == 0) break;
+                lock (_cfg)
+                {
+                    _cfg.Bookmarks.RemoveAll(b => b.Url == url);
+                    _cfg.Bookmarks.Insert(0, new Bookmark { Name = name.Length > 0 ? name : url, Url = url });
+                    _cfg.Save();
+                }
+                Log.Write($"🔖 Закладка: {name} — {url}");
+                _ = Broadcast(BookmarksMessage());
+                break;
+            }
+            case "bookmark_delete":
+            {
+                string url = Str(m, "url");
+                lock (_cfg) { _cfg.Bookmarks.RemoveAll(b => b.Url == url); _cfg.Save(); }
+                _ = Broadcast(BookmarksMessage());
+                break;
+            }
+            case "bookmark_open":
+            {
+                string url = Str(m, "url");
+                if (url.Length > 0) Background(() => Task.Run(() => Chrome.Navigate(_cfg, url)));
                 break;
             }
             case "headphones_connect":
@@ -271,6 +325,11 @@ public sealed class Server
     }
 
     object StateMessage() => new { t = "state", state = _orch.Snapshot() };
+
+    object BookmarksMessage()
+    {
+        lock (_cfg) return new { t = "bookmarks", items = _cfg.Bookmarks.Select(b => new { name = b.Name, url = b.Url }).ToList() };
+    }
 
     object DevicesMessage()
     {

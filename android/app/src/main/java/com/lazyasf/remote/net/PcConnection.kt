@@ -27,6 +27,11 @@ sealed interface Conn {
 
 data class Step(val id: String, val title: String, val status: String, val detail: String?)
 
+data class Bookmark(val name: String, val url: String)
+
+/** Открытая сейчас страница в Chrome на ноуте. ok = false — Chrome не открыт. */
+data class PageInfo(val ok: Boolean, val url: String, val title: String)
+
 data class Session(
     val active: Boolean = false,
     val busy: Boolean = false,
@@ -56,8 +61,9 @@ class PcConnection(
         .build()
 
     private fun httpFor(host: String): OkHttpClient {
-        if (host == "127.0.0.1" || host == "localhost") return baseHttp // adb reverse по USB
-        return socketFactory()?.let { baseHttp.newBuilder().socketFactory(it).build() } ?: baseHttp
+        // adb reverse по USB идёт через 127.0.0.1 — Wi-Fi-сеть там не нужна
+        val base = if (host == "127.0.0.1" || host == "localhost") null else socketFactory()
+        return baseHttp.newBuilder().socketFactory(NoDelaySocketFactory(base ?: SocketFactory.getDefault())).build()
     }
 
     private data class Target(val host: String, val port: Int, val name: String?)
@@ -76,6 +82,12 @@ class PcConnection(
     val devices: StateFlow<List<String>> = _devices
     private val _defaultDevice = MutableStateFlow<String?>(null)
     val defaultDevice: StateFlow<String?> = _defaultDevice
+    private val _bookmarks = MutableStateFlow<List<Bookmark>>(emptyList())
+    val bookmarks: StateFlow<List<Bookmark>> = _bookmarks
+    private val _pageInfo = MutableStateFlow<PageInfo?>(null)
+    val pageInfo: StateFlow<PageInfo?> = _pageInfo
+
+    fun clearPageInfo() { _pageInfo.value = null }
 
     val isConnected get() = _conn.value is Conn.Connected
 
@@ -207,6 +219,14 @@ class PcConnection(
                 _conn.value = Conn.NeedPin(t.host, wrongPin = wrong)
             }
             "state" -> _session.value = parseSession(m.getJSONObject("state"))
+            "bookmarks" -> {
+                val arr = m.getJSONArray("items")
+                _bookmarks.value = (0 until arr.length()).map {
+                    val o = arr.getJSONObject(it)
+                    Bookmark(o.optString("name"), o.optString("url"))
+                }
+            }
+            "page_info" -> _pageInfo.value = PageInfo(m.optBoolean("ok"), m.optString("url"), m.optString("title"))
             "devices" -> {
                 val arr = m.getJSONArray("devices")
                 _devices.value = (0 until arr.length()).map { arr.getString(it) }

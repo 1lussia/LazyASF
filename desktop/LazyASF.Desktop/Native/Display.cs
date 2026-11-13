@@ -42,19 +42,27 @@ public static class Display
     /// </summary>
     public static async Task<bool> SetWithRetry(Topology t)
     {
-        for (int i = 0; i < 4; i++)
-        {
-            if (Set(t)) { await Task.Delay(2500); return true; }
-            await Task.Delay(2000);
-        }
+        if (Set(t)) { await Task.Delay(2500); return true; }
+
+        // На этом ноуте SetDisplayConfig часто отвечает 31, а Win+P (DisplaySwitch) при этом работает —
+        // поэтому сразу пробуем его и ждём, пока Windows действительно переключит экран.
         var arg = t switch { Topology.Internal => "/internal", Topology.Clone => "/clone", Topology.Extend => "/extend", _ => "/external" };
-        try
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("DisplaySwitch.exe", arg) { UseShellExecute = false, CreateNoWindow = true });
-            await Task.Delay(4000);
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("DisplaySwitch.exe", arg) { UseShellExecute = false, CreateNoWindow = true });
+            }
+            catch (Exception e) { Log.Write($"DisplaySwitch: {e.Message}"); }
+            for (int i = 0; i < 20; i++)
+            {
+                await Task.Delay(500);
+                if (Current() == t) { await Task.Delay(1500); return true; }
+            }
+            if (Set(t)) { await Task.Delay(2500); return true; }
         }
-        catch (Exception e) { Log.Write($"DisplaySwitch: {e.Message}"); }
-        return Current() == t;
+        Log.Write($"Экран: режим {t} так и не включился (сейчас {Current()})");
+        return false;
     }
 
     public static int ScreenCount => Screen.AllScreens.Length;

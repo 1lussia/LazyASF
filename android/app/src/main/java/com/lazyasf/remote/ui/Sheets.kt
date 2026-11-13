@@ -20,6 +20,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardReturn
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Backspace
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.SpaceBar
@@ -78,6 +83,8 @@ fun AppSheet(sheet: Sheet, vm: AppViewModel, onDismiss: () -> Unit) {
                 Sheet.Headphones -> HeadphonesContent(vm, onDismiss)
                 Sheet.Settings -> SettingsContent(vm)
                 Sheet.Keyboard -> KeyboardContent(vm)
+                Sheet.BookmarkAdd -> BookmarkAddContent(vm, onDismiss)
+                Sheet.Bookmarks -> BookmarksContent(vm, onDismiss)
                 Sheet.None -> {}
             }
         }
@@ -172,6 +179,72 @@ private fun LabeledSwitch(label: String, value: Boolean, onChange: (Boolean) -> 
             checked = value, onCheckedChange = onChange,
             colors = SwitchDefaults.colors(checkedTrackColor = Palette.Violet, checkedThumbColor = Color.White, uncheckedTrackColor = Color.White.copy(alpha = 0.1f)),
         )
+    }
+}
+
+@Composable
+private fun BookmarkAddContent(vm: AppViewModel, close: () -> Unit) {
+    val page by vm.pc.pageInfo.collectAsState()
+    var name by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { vm.requestPageInfo() }
+    LaunchedEffect(page) {
+        page?.let {
+            if (name.isEmpty()) name = it.title
+            if (url.isEmpty()) url = it.url
+        }
+    }
+    SheetTitle("Добавить в закладки", "Страница, которая сейчас на телевизоре")
+    when {
+        page == null -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Spinner(Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Узнаю адрес страницы…", color = Palette.TextDim)
+        }
+        page?.ok == false -> Text("Chrome на ноуте не открыт", color = Palette.Fail)
+    }
+    OutlinedTextField(
+        value = name, onValueChange = { name = it }, modifier = Modifier.fillMaxWidth(),
+        label = { Text("Название") }, singleLine = true, colors = glassFieldColors(), shape = RoundedCornerShape(18.dp),
+    )
+    OutlinedTextField(
+        value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(),
+        label = { Text("Адрес") }, singleLine = true, colors = glassFieldColors(), shape = RoundedCornerShape(18.dp),
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = Palette.TextDim),
+    )
+    GlassButton(
+        onClick = { vm.addBookmark(name, url); close() },
+        modifier = Modifier.fillMaxWidth().height(56.dp), radius = 22.dp,
+        tint = Palette.Violet, tintStrength = 0.7f, enabled = url.isNotBlank(),
+    ) {
+        Text("Сохранить", fontWeight = FontWeight.SemiBold, color = Palette.Text)
+    }
+}
+
+@Composable
+private fun BookmarksContent(vm: AppViewModel, close: () -> Unit) {
+    val items by vm.pc.bookmarks.collectAsState()
+    SheetTitle("Закладки", if (items.isEmpty()) null else "Нажми — откроется на телевизоре")
+    if (items.isEmpty()) Text("Пока пусто. Добавить страницу — кнопкой со знаком «+» на тачпаде.", color = Palette.TextDim)
+    Column(
+        Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items.forEach { b ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GlassButton(
+                    onClick = { vm.openBookmark(b); close() },
+                    modifier = Modifier.weight(1f).height(64.dp), radius = 22.dp, contentAlignment = Alignment.CenterStart,
+                ) {
+                    Column(Modifier.padding(horizontal = 18.dp)) {
+                        Text(b.name, color = Palette.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(b.url.removePrefix("https://").removePrefix("www."), color = Palette.TextDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                GlassIconButton(Icons.Rounded.DeleteOutline, "Удалить", { vm.deleteBookmark(b.url) }, size = 48.dp, tint = Palette.TextDim)
+            }
+        }
     }
 }
 

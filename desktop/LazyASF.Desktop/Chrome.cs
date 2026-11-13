@@ -47,7 +47,7 @@ public static class Chrome
     {
         var exe = FindExe(cfg);
         if (exe is null) { Log.Write("chrome.exe не найден — укажи chromePath в config.json"); return null; }
-        var before = Native.Win.ChromeWindows();
+        var before = Native.Win.ChromeWindows().ToHashSet();
         var profile = ProfileDir(cfg);
         Log.Write($"Chrome [{profile}]: {url}");
         var args = $"--profile-directory=\"{profile}\" --new-window --start-maximized \"{url}\"";
@@ -66,6 +66,86 @@ public static class Chrome
         }
         Log.Write("Новое окно Chrome не нашлось");
         return IntPtr.Zero;
+    }
+
+    // ---------------------------------------------------------------- закладки
+
+    /// <summary>Окно Chrome, с которым сейчас работаем: активное, иначе самое верхнее.</summary>
+    static IntPtr CurrentWindow() => Native.Win.ChromeWindows().FirstOrDefault();
+
+    public static bool HasWindow() => CurrentWindow() != IntPtr.Zero;
+
+    /// <summary>Адрес и заголовок открытой страницы. null — Chrome не открыт.</summary>
+    public static (string url, string title)? CurrentPage()
+    {
+        var h = CurrentWindow();
+        if (h == IntPtr.Zero) return null;
+        var title = Native.Win.Title(h);
+        if (title.EndsWith(" - Google Chrome")) title = title[..^" - Google Chrome".Length];
+        var url = OmniboxText(h) ?? CopyUrlViaKeyboard(h) ?? "";
+        if (url.Length > 0 && !url.Contains("://")) url = "https://" + url;
+        return (url, title.Trim());
+    }
+
+    /// <summary>Адресная строка через UI Automation — без нажатий и без буфера обмена.</summary>
+    static string? OmniboxText(IntPtr h)
+    {
+        try
+        {
+            var win = System.Windows.Automation.AutomationElement.FromHandle(h);
+            var box = win.FindFirst(System.Windows.Automation.TreeScope.Descendants,
+                new System.Windows.Automation.PropertyCondition(System.Windows.Automation.AutomationElement.ClassNameProperty, "OmniboxViewViews"));
+            if (box?.TryGetCurrentPattern(System.Windows.Automation.ValuePattern.Pattern, out var p) == true)
+            {
+                var v = ((System.Windows.Automation.ValuePattern)p).Current.Value?.Trim();
+                if (!string.IsNullOrEmpty(v)) return v;
+            }
+        }
+        catch (Exception e) { Log.Write($"Адресная строка: {e.Message}"); }
+        return null;
+    }
+
+    /// <summary>Запасной способ: Ctrl+L, Ctrl+C, Esc — и возвращаем буфер обмена как был.</summary>
+    static string? CopyUrlViaKeyboard(IntPtr h)
+    {
+        if (!Native.Win.Activate(h, allowClick: false)) return null;
+        string? result = null;
+        var t = new Thread(() =>
+        {
+            string? old = null;
+            try { if (Clipboard.ContainsText()) old = Clipboard.GetText(); } catch { }
+            Native.Input.Combo("ctrl+l"); Thread.Sleep(150);
+            Native.Input.Combo("ctrl+c"); Thread.Sleep(200);
+            Native.Input.Combo("esc");
+            try { if (Clipboard.ContainsText()) result = Clipboard.GetText().Trim(); } catch { }
+            try { if (old is not null) Clipboard.SetText(old); } catch { }
+        });
+        t.SetApartmentState(ApartmentState.STA);
+        t.Start();
+        t.Join(3000);
+        return string.IsNullOrEmpty(result) ? null : result;
+    }
+
+    /// <summary>
+    /// Открыть адрес в текущем окне Chrome (на ТВ оно уже на весь экран). Если окно не отдаёт фокус —
+    /// открываем новой вкладкой в нём же через chrome.exe.
+    /// </summary>
+    public static void Navigate(AppConfig cfg, string url)
+    {
+        var h = CurrentWindow();
+        if (h != IntPtr.Zero && Native.Win.Activate(h, allowClick: false))
+        {
+            Native.Input.Combo("ctrl+l"); Thread.Sleep(150);
+            Native.Input.Text(url); Thread.Sleep(100);
+            Native.Input.Combo("delete"); // убрать автодополнение, которое Chrome дописывает выделенным
+            Native.Input.Combo("enter");
+            return;
+        }
+        var exe = FindExe(cfg);
+        if (exe is null) return;
+        var args = $"--profile-directory=\"{ProfileDir(cfg)}\" \"{url}\"";
+        if (!Native.ProcessLauncher.StartAsChildOf("explorer", exe, args))
+            Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false });
     }
 
     /// <summary>Полный экран (F11) для окна. false — окно не удалось сделать активным.</summary>

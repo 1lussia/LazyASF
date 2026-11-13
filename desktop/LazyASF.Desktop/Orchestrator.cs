@@ -109,9 +109,12 @@ public sealed class Orchestrator
     }
 
     // ---------------------------------------------------------------- launch
-    public async Task Launch(string siteKey, string? headphones, string? output)
+    /// <param name="url">Для закладок: siteKey = "bookmark", адрес и название передаются явно.</param>
+    public async Task Launch(string siteKey, string? headphones, string? output, string? url = null, string? title = null)
     {
-        if (!_cfg.Sites.TryGetValue(siteKey, out var site)) { Log.Write($"Неизвестный сайт: {siteKey}"); return; }
+        SiteConfig? site;
+        if (siteKey == "bookmark" && !string.IsNullOrWhiteSpace(url)) site = new() { Title = string.IsNullOrWhiteSpace(title) ? url : title, Url = url };
+        else if (!_cfg.Sites.TryGetValue(siteKey, out site)) { Log.Write($"Неизвестный сайт: {siteKey}"); return; }
         if (!await _gate.WaitAsync(0)) { Log.Write("Уже выполняется другая команда"); return; }
         try
         {
@@ -281,6 +284,20 @@ public sealed class Orchestrator
                     active = await WaitActive(6000);
                 }
             }
+        }
+
+        // Подключилась только гарнитура (Hands-Free: моно, качество как в звонке) — ждём стерео-режим «Наушники».
+        if (active is { IsHandsFree: true })
+        {
+            Mark("headphones", "running", "Жду стерео-режим…");
+            var stereoEp = Audio.FindHeadphones(name).FirstOrDefault(e => !e.IsHandsFree);
+            if (stereoEp is not null) Audio.BtOneShot(stereoEp, connect: true);
+            for (var until = DateTime.UtcNow.AddSeconds(8); DateTime.UtcNow < until; await Task.Delay(400))
+            {
+                var s = Audio.FindHeadphones(name).FirstOrDefault(e => e.Active && !e.IsHandsFree);
+                if (s is not null) { active = s; break; }
+            }
+            if (active.IsHandsFree) Log.Write("Наушники подключились только как гарнитура (Hands-Free) — звук будет хуже");
         }
 
         if (active is null)

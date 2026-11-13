@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Mouse
 import androidx.compose.material.icons.rounded.SettingsBackupRestore
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -46,7 +47,7 @@ import com.lazyasf.remote.Screen
 import com.lazyasf.remote.Site
 import com.lazyasf.remote.net.Conn
 
-enum class Sheet { None, Sleep, Headphones, Settings, Keyboard }
+enum class Sheet { None, Sleep, Headphones, Settings, Keyboard, BookmarkAdd, Bookmarks }
 
 /** Ползунок AmneziaVPN на ноуте. Пока Amnezia переключается — крутилка вместо щита. */
 @Composable
@@ -138,35 +139,23 @@ fun HomeScreen(vm: AppViewModel, onLaunch: (Site) -> Unit, openSheet: (Sheet) ->
             }
         }
 
-        // --- прогресс запуска
-        var expanded by remember { mutableStateOf(true) }
-        AnimatedVisibility(session.steps.isNotEmpty() && (session.busy || session.steps.any { it.status == "fail" })) {
-            GlassButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(), radius = 26.dp, contentAlignment = Alignment.TopStart) {
-                Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).background(if (session.busy) Palette.Orange else Palette.Fail, CircleShape))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (session.busy) "Настраиваю ноутбук…" else "Что-то не получилось", color = Palette.Text, fontWeight = FontWeight.SemiBold)
-                    }
-                    if (expanded) session.steps.forEach { StepRow(it) }
-                }
-            }
-        }
-
         // --- нижние кнопки
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassButton(onClick = { vm.screen = Screen.Touchpad }, modifier = Modifier.weight(1f).height(64.dp), radius = 24.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Mouse, null, tint = Palette.Text)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Тачпад", color = Palette.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Rounded.Mouse, null, tint = Palette.Text, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Тачпад", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                 }
+            }
+            GlassButton(onClick = { openSheet(Sheet.Bookmarks) }, modifier = Modifier.size(64.dp), radius = 24.dp) {
+                Icon(Icons.Rounded.Bookmarks, "Закладки", tint = Palette.Text)
             }
             GlassButton(onClick = vm::restore, modifier = Modifier.weight(1f).height(64.dp), radius = 24.dp, enabled = session.active) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.SettingsBackupRestore, null, tint = Palette.Text)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Вернуть всё", color = Palette.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Rounded.SettingsBackupRestore, null, tint = Palette.Text, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Вернуть всё", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                 }
             }
         }
